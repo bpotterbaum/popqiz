@@ -1,6 +1,6 @@
 # Popqiz 🎉
 
-**Popqiz** is a fast, multiplayer, AI-powered trivia game built for parties, families, and social play. It generates fresh questions in real time, avoids repeats on the same device, and runs in a bold, full-screen mobile experience that feels like a real game — not just a webpage.
+**Popqiz** is a fast, multiplayer, AI-powered trivia game designed for parties, families, and social play. It features real-time question generation, device-based uniqueness (no repeat questions on the same device), optional content moderation and skipping, and a bold, game-like full-screen experience that feels native on mobile. Built to be lightweight, extensible, and fun-first — optimized for rapid iteration, “vibe-coding,” and live play.
 
 ---
 
