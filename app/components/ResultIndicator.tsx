@@ -41,12 +41,9 @@ export default function ResultIndicator({
   const icon = isCorrect ? "✓" : "✕";
 
   return (
-    <div
-      className="flex flex-col items-center justify-center space-y-2"
-      style={{ width: size, height: size }}
-    >
+    <div className="flex flex-col items-center justify-center space-y-2">
       <div
-        className="rounded-full flex items-center justify-center font-bold text-white shadow-lg"
+        className="rounded-full flex items-center justify-center font-bold text-white shadow-lg flex-shrink-0"
         style={{
           width: size,
           height: size,
@@ -57,7 +54,7 @@ export default function ResultIndicator({
         {icon}
       </div>
       <p
-        className="text-sm font-semibold text-center"
+        className="text-xs font-semibold text-center"
         style={{ color }}
       >
         {selectedMessage}

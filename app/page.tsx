@@ -3,8 +3,8 @@ import Image from "next/image";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-8">
+    <main className="h-[100dvh] bg-background flex flex-col items-center justify-center px-4 overflow-hidden">
+      <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="flex justify-center mb-4">
           <Image

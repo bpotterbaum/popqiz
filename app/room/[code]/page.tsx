@@ -579,14 +579,14 @@ export default function RoomPage() {
 
   if (gameState === "loading" || !room || !currentQuestion) {
     return (
-      <main className="min-h-screen bg-background flex items-center justify-center">
+      <main className="h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-text-secondary">Loading...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background flex flex-col">
+    <main className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       {/* Persistent Header */}
       <header className="bg-surface shadow-sm px-4 py-3 flex items-center justify-between relative">
         {/* Team Name - Centered */}
@@ -612,7 +612,7 @@ export default function RoomPage() {
       </header>
 
       {/* Game Content */}
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-0">
         {gameState === "question" || gameState === "reveal" ? (
           <QuestionView
             question={currentQuestion.question}

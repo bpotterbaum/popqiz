@@ -30,29 +30,29 @@ export default function QuestionView({
   const isCorrect = selectedAnswer !== null && selectedAnswer === correctAnswerIndex;
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-8 px-4 py-8 min-h-[60vh]">
+    <div className="flex flex-col items-center justify-center space-y-3 px-4 py-2 w-full max-h-full overflow-hidden">
       {/* Timer/Result Indicator and Question */}
-      <div className="flex flex-col items-center space-y-6">
+      <div className="flex flex-col items-center space-y-3 flex-shrink-0">
         {/* Show Result Indicator during reveal (if player answered), Timer otherwise */}
         {isRevealPhase ? (
           selectedAnswer !== null ? (
-            <ResultIndicator isCorrect={isCorrect} size={75} />
+            <ResultIndicator isCorrect={isCorrect} size={60} />
           ) : (
             // Show timer during reveal if player hasn't answered yet (edge case)
-            <CircularTimer endTime={roundEndsAt} duration={20} size={75} />
+            <CircularTimer endTime={roundEndsAt} duration={20} size={60} />
           )
         ) : (
-          <CircularTimer endTime={roundEndsAt} duration={20} size={75} />
+          <CircularTimer endTime={roundEndsAt} duration={20} size={60} />
         )}
         
         {/* Question Text */}
-        <h2 className="text-3xl font-bold text-center text-text-primary px-4 leading-tight max-w-2xl" style={{ fontSize: '40px' }}>
+        <h2 className="text-lg sm:text-xl font-bold text-center text-text-primary px-2 leading-tight max-w-2xl">
           {question}
         </h2>
       </div>
 
       {/* Answer Buttons */}
-      <div className="w-full max-w-md space-y-4">
+      <div className="w-full max-w-md space-y-2 flex-shrink-0 min-h-0">
         {answers.map((answer, index) => {
           const isSelected = selectedAnswer === index;
           const isCorrectAnswer = correctAnswerIndex !== null && index === correctAnswerIndex;
@@ -60,7 +60,7 @@ export default function QuestionView({
 
           // Determine styling based on reveal phase
           let buttonStyle: React.CSSProperties = {};
-          let buttonClasses = "w-full py-7 px-6 rounded-2xl text-xl font-semibold text-center transition-all min-h-[72px] flex items-center justify-center ";
+          let buttonClasses = "w-full py-3 px-4 rounded-2xl text-base font-semibold text-center transition-all min-h-[56px] flex items-center justify-center ";
 
           if (isRevealPhase) {
             // Reveal phase: highlight correct, fade incorrect, style selected

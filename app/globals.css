@@ -9,6 +9,13 @@
   --text-secondary: #E0E0E0;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  width: 100%;
+}
+
 body {
   color: var(--text-primary);
   background: var(--background);
