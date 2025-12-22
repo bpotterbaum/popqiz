@@ -104,9 +104,9 @@ export default function CircularTimer({
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
       >
         <span
-          className="text-3xl font-bold tabular-nums"
+          className="text-sm font-bold tabular-nums"
           style={{
-            color: timeRemaining <= 5 ? "#FB7185" : timeRemaining <= 10 ? "#FBBF24" : "#1F2937",
+            color: timeRemaining <= 5 ? "#FB7185" : timeRemaining <= 10 ? "#FBBF24" : "#FFFFFF",
             transition: "color 0.3s ease",
             lineHeight: 1,
             display: "block",

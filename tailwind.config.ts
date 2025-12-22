@@ -10,20 +10,27 @@ const config: Config = {
     extend: {
       colors: {
         // Base colors from UX.md
-        background: "#F7F8FA",
+        background: "#00486D",
         surface: "#FFFFFF",
-        "text-primary": "#1F2937",
-        "text-secondary": "#6B7280",
+        "text-primary": "#FFFFFF", // Light text for dark background
+        "text-primary-dark": "#1F2937", // Dark text for light surfaces
+        "text-secondary": "#E0E0E0", // Light secondary text for dark background
+        "text-secondary-dark": "#6B7280", // Dark secondary text for light surfaces
         
         // Brand & Action Color
-        brand: "#6366F1", // Indigo
+        brand: "#FCB107", // Primary (temp)
+        secondary: "#02ACC2", // Secondary (temp)
+        tertiary: "#E50846", // Tertiary (temp)
         
         // Team Colors
-        orchid: "#C084FC",
-        "sky-blue": "#60A5FA",
-        mint: "#34D399",
-        peach: "#FB7185",
-        gold: "#FBBF24",
+        yellow: "#FDBA2D",
+        teal: "#2EC4D6",
+        red: "#E63946",
+        orange: "#F77F00",
+        "light-blue": "#7ED6DF",
+        pink: "#FF85C0",
+        lime: "#B6E600",
+        white: "#FFFFFF",
         
         // Feedback & Status Colors
         success: "#22C55E",

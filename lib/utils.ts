@@ -25,7 +25,7 @@ export function getOrCreateDeviceId(): string {
 }
 
 // Team colors from UX.md (database enum values)
-export const TEAM_COLORS = ['orchid', 'sky-blue', 'mint', 'peach', 'gold'] as const;
+export const TEAM_COLORS = ['yellow', 'teal', 'red', 'orange', 'light-blue', 'pink', 'lime', 'white'] as const;
 export type TeamColor = typeof TEAM_COLORS[number] | string; // Allow string for database values
 
 // Team names (fun AI-generated names) - 100 total
@@ -135,12 +135,15 @@ export const TEAM_NAMES = [
 // Get team color hex value
 export function getTeamColorHex(color: string): string {
   const colorMap: Record<string, string> = {
-    'orchid': '#C084FC',
-    'sky-blue': '#60A5FA',
-    'sky_blue': '#60A5FA', // Handle underscore variant
-    'mint': '#34D399',
-    'peach': '#FB7185',
-    'gold': '#FBBF24',
+    'yellow': '#FDBA2D',
+    'teal': '#2EC4D6',
+    'red': '#E63946',
+    'orange': '#F77F00',
+    'light-blue': '#7ED6DF',
+    'light_blue': '#7ED6DF', // Handle underscore variant
+    'pink': '#FF85C0',
+    'lime': '#B6E600',
+    'white': '#FFFFFF',
   };
   return colorMap[color] || '#6366F1'; // Default to brand color
 }

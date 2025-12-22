@@ -35,7 +35,7 @@ export default function MoreMenu({
       {/* More Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 hover:bg-background rounded-lg transition-colors"
+        className="p-2 rounded-lg"
         aria-label="More options"
       >
         <svg
@@ -47,7 +47,7 @@ export default function MoreMenu({
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-text-secondary"
+          className="text-black"
         >
           <circle cx="12" cy="12" r="1" />
           <circle cx="12" cy="5" r="1" />
@@ -72,7 +72,7 @@ export default function MoreMenu({
                   setIsOpen(false);
                   onInvite();
                 }}
-                className="w-full px-4 py-3 text-left text-text-primary hover:bg-background transition-colors flex items-center space-x-3"
+                className="w-full px-4 py-3 text-left text-text-primary-dark flex items-center space-x-3"
               >
                 <svg
                   width="20"
@@ -99,7 +99,7 @@ export default function MoreMenu({
                   setIsOpen(false);
                   onQuit();
                 }}
-                className="w-full px-4 py-3 text-left text-text-primary hover:bg-background transition-colors flex items-center space-x-3 text-warning"
+                className="w-full px-4 py-3 text-left text-text-primary flex items-center space-x-3 text-warning"
               >
                 <svg
                   width="20"

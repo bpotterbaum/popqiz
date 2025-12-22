@@ -64,7 +64,7 @@ export default function StartPage() {
                 className={`py-4 px-2 rounded-xl text-sm font-medium transition-all ${
                   ageRange === option.value
                     ? "bg-brand text-white shadow-md"
-                    : "bg-transparent text-text-secondary hover:text-text-primary"
+                    : "bg-transparent text-text-secondary-dark"
                 }`}
               >
                 <div>{option.label}</div>
@@ -87,7 +87,7 @@ export default function StartPage() {
         <button
           onClick={handleStartGame}
           disabled={loading}
-          className="w-full bg-brand text-white text-xl font-semibold py-5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-shadow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-brand text-white text-xl font-semibold py-5 px-6 rounded-2xl shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Starting..." : "Start Game"}
         </button>
@@ -95,7 +95,7 @@ export default function StartPage() {
         {/* Back link */}
         <Link
           href="/"
-          className="text-center text-text-secondary hover:text-text-primary transition-colors"
+          className="text-center text-text-secondary"
         >
           ← Back
         </Link>

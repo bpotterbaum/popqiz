@@ -500,7 +500,7 @@ export default function RoomPage() {
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: myTeamColor }}
             />
-            <span className="text-sm font-semibold text-text-primary">
+            <span className="text-sm font-semibold text-black">
               {myTeamName}
             </span>
           </div>
@@ -545,7 +545,7 @@ export default function RoomPage() {
         <div className="fixed bottom-4 left-0 right-0 flex justify-center z-10">
           <button
             onClick={() => setQuestionControlsOpen(true)}
-            className="text-sm text-text-secondary/60 hover:text-text-secondary transition-colors underline-offset-2 hover:underline bg-surface/80 backdrop-blur-sm px-4 py-2 rounded-full"
+            className="text-sm text-white/40 underline-offset-2 bg-surface/8 px-4 py-2 rounded-full"
           >
             Something looks off
           </button>

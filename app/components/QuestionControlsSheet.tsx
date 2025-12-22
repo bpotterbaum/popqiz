@@ -39,7 +39,7 @@ export default function QuestionControlsSheet({
           </div>
 
           {/* Title */}
-          <h3 className="text-xl font-bold text-text-primary text-center mb-4">
+          <h3 className="text-xl font-bold text-text-primary-dark text-center mb-4">
             Something off?
           </h3>
 
@@ -47,21 +47,21 @@ export default function QuestionControlsSheet({
           <div className="space-y-3">
             <button
               onClick={() => handleAction(onSkip)}
-              className="w-full bg-surface text-text-primary text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary/20 hover:border-brand/40 transition-colors active:scale-[0.98] text-left"
+              className="w-full bg-surface text-text-primary-dark text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary-dark/20 active:scale-[0.98] text-left"
             >
               Skip Question
             </button>
 
             <button
               onClick={() => handleAction(onNotAppropriate)}
-              className="w-full bg-surface text-text-primary text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary/20 hover:border-warning/40 transition-colors active:scale-[0.98] text-left"
+              className="w-full bg-surface text-text-primary-dark text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary-dark/20 active:scale-[0.98] text-left"
             >
               Not Appropriate
             </button>
 
             <button
               onClick={() => handleAction(onBadConfusing)}
-              className="w-full bg-surface text-text-primary text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary/20 hover:border-brand/40 transition-colors active:scale-[0.98] text-left"
+              className="w-full bg-surface text-text-primary-dark text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary-dark/20 active:scale-[0.98] text-left"
             >
               Bad / Confusing
             </button>

@@ -20,7 +20,7 @@ export default function Home() {
         {/* Primary CTA */}
         <Link
           href="/start"
-          className="block w-full bg-brand text-white text-xl font-semibold py-5 px-6 rounded-2xl text-center shadow-lg hover:shadow-xl transition-shadow active:scale-[0.98]"
+          className="block w-full bg-brand text-white text-xl font-semibold py-5 px-6 rounded-2xl text-center shadow-lg active:scale-[0.98]"
         >
           Start a Popqiz
         </Link>
@@ -28,7 +28,7 @@ export default function Home() {
         {/* Secondary CTA */}
         <Link
           href="/join"
-          className="block w-full bg-surface text-text-primary text-lg font-medium py-4 px-6 rounded-2xl text-center border-2 border-text-secondary/20 hover:border-brand/40 transition-colors active:scale-[0.98]"
+          className="block w-full bg-surface text-text-primary-dark text-lg font-medium py-4 px-6 rounded-2xl text-center border-2 border-text-secondary-dark/20 active:scale-[0.98]"
         >
           Join
         </Link>

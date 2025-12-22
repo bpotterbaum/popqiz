@@ -81,6 +81,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (playerError || !player) {
+      console.error('Player creation error (join):', {
+        playerError,
+        roomId: room.id,
+        deviceId,
+        teamName: name,
+        teamColor: color,
+        hasPlayer: !!player,
+        existingPlayersCount: existingPlayers?.length || 0,
+      });
       return NextResponse.json(
         { error: 'Failed to join room', details: playerError },
         { status: 500 }
@@ -100,8 +109,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error joining room:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

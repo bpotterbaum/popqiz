@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import { QrcodeCanvas } from "react-qrcode-pretty";
 
 interface InviteSheetProps {
   roomCode: string;
@@ -89,10 +89,10 @@ export default function InviteSheet({
 
           {/* Room Code */}
           <div className="text-center space-y-2">
-            <p className="text-text-secondary text-sm">Room Code</p>
+            <p className="text-text-secondary-dark text-sm">Room Code</p>
             <button
               onClick={handleCopyCode}
-              className="text-4xl font-bold text-text-primary tracking-wider hover:opacity-80 transition-opacity active:scale-95"
+              className="text-4xl font-bold text-text-primary-dark tracking-wider active:scale-95"
             >
               {roomCode}
             </button>
@@ -106,13 +106,20 @@ export default function InviteSheet({
           {/* QR Code */}
           <div className="flex justify-center">
             <div className="w-48 h-48 bg-white rounded-2xl flex items-center justify-center border-2 border-text-secondary/20 p-4">
-              <QRCodeSVG
+              <QrcodeCanvas
                 value={shareUrl}
-                size={176}
-                level="H"
-                includeMargin={false}
-                fgColor="#1F2937"
+                variant={{
+                  eyes: "fluid",
+                  body: "fluid",
+                }}
+                color={{
+                  eyes: "#1F2937",
+                  body: "#1F2937",
+                }}
+                padding={20}
+                margin={0}
                 bgColor="#FFFFFF"
+                size={176}
               />
             </div>
           </div>
@@ -120,7 +127,7 @@ export default function InviteSheet({
           {/* Share Link Button */}
           <button
             onClick={handleShareLink}
-            className="w-full bg-brand text-white text-lg font-semibold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-shadow active:scale-[0.98]"
+            className="w-full bg-brand text-white text-lg font-semibold py-4 px-6 rounded-2xl shadow-lg active:scale-[0.98]"
           >
             {copied ? "Link Copied!" : "Share Link"}
           </button>
@@ -128,7 +135,7 @@ export default function InviteSheet({
           {/* Copy Link Button */}
           <button
             onClick={handleCopyLink}
-            className="w-full bg-surface text-text-primary text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary/20 hover:border-brand/40 transition-colors active:scale-[0.98]"
+            className="w-full bg-surface text-text-primary-dark text-lg font-medium py-4 px-6 rounded-2xl border-2 border-text-secondary/20 active:scale-[0.98]"
           >
             {linkCopied ? "Link Copied!" : "Copy Link"}
           </button>

@@ -11,7 +11,7 @@ CREATE TYPE room_status AS ENUM ('active', 'ended');
 CREATE TYPE feedback_type AS ENUM ('skip', 'inappropriate', 'confusing');
 
 -- Team color enum
-CREATE TYPE team_color AS ENUM ('orchid', 'sky-blue', 'mint', 'peach', 'gold');
+CREATE TYPE team_color AS ENUM ('yellow', 'teal', 'red', 'orange', 'light-blue', 'pink', 'lime', 'white');
 
 -- Rooms table
 CREATE TABLE rooms (
@@ -102,6 +102,21 @@ CREATE POLICY "Anyone can read question cache" ON question_cache FOR SELECT USIN
 -- Allow service role to insert/update (via API routes)
 -- Note: In production, you'd want more restrictive policies
 -- For MVP, we'll handle auth in API routes
+
+-- Allow inserts to rooms (for creating new rooms)
+CREATE POLICY "Allow insert to rooms" ON rooms FOR INSERT WITH CHECK (true);
+
+-- Allow inserts to players (for joining rooms)
+CREATE POLICY "Allow insert to players" ON players FOR INSERT WITH CHECK (true);
+
+-- Allow updates to players (for scoring)
+CREATE POLICY "Allow update to players" ON players FOR UPDATE USING (true);
+
+-- Allow inserts to answers
+CREATE POLICY "Allow insert to answers" ON answers FOR INSERT WITH CHECK (true);
+
+-- Allow inserts to question_feedback
+CREATE POLICY "Allow insert to question_feedback" ON question_feedback FOR INSERT WITH CHECK (true);
 
 -- Enable Realtime for tables (must be done after tables are created)
 ALTER PUBLICATION supabase_realtime ADD TABLE rooms;

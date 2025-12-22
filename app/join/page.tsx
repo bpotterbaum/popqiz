@@ -74,7 +74,7 @@ export default function JoinPage() {
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
             placeholder="Enter code"
-            className="w-full bg-surface text-text-primary text-2xl font-bold py-5 px-6 rounded-2xl border-2 border-text-secondary/20 focus:border-brand focus:outline-none text-center tracking-wider uppercase"
+            className="w-full bg-surface text-text-primary-dark text-2xl font-bold py-5 px-6 rounded-2xl border-2 border-text-secondary-dark/20 focus:border-brand focus:outline-none text-center tracking-wider uppercase"
             maxLength={6}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -96,7 +96,7 @@ export default function JoinPage() {
         <button
           onClick={handleJoin}
           disabled={roomCode.trim().length === 0 || loading}
-          className="w-full bg-brand text-white text-xl font-semibold py-5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-shadow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-brand text-white text-xl font-semibold py-5 px-6 rounded-2xl shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Joining..." : "Join Game"}
         </button>
@@ -104,7 +104,7 @@ export default function JoinPage() {
         {/* Back link */}
         <Link
           href="/"
-          className="text-center text-text-secondary hover:text-text-primary transition-colors"
+          className="text-center text-text-secondary"
         >
           ← Back
         </Link>

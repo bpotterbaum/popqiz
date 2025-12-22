@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --background: #F7F8FA;
+  --background: #00486D;
   --surface: #FFFFFF;
-  --text-primary: #1F2937;
-  --text-secondary: #6B7280;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E0E0E0;
 }
 
 body {
@@ -18,4 +18,5 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
 

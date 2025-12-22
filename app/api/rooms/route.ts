@@ -83,6 +83,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (playerError || !player) {
+      console.error('Player creation error:', {
+        playerError,
+        roomId: room.id,
+        deviceId,
+        teamName: name,
+        teamColor: color,
+        hasPlayer: !!player,
+      });
       // Clean up room if player creation fails
       await supabase.from('rooms').delete().eq('id', room.id);
       return NextResponse.json(
@@ -105,8 +113,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error creating room:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
