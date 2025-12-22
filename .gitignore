@@ -26,9 +26,14 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env.local
+
+# example env file is safe to commit
+!.env.local.example
 
 # vercel
 .vercel
+vercel-env-variables.txt
 
 # typescript
 *.tsbuildinfo

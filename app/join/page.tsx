@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getOrCreateDeviceId } from "@/lib/utils";
 
-export default function JoinPage() {
+function JoinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [roomCode, setRoomCode] = useState("");
@@ -110,6 +110,23 @@ export default function JoinPage() {
         </Link>
       </div>
     </main>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-background flex flex-col px-4 py-8">
+        <div className="w-full max-w-md mx-auto space-y-8 flex-1 flex flex-col justify-center">
+          <h1 className="text-3xl font-bold text-center text-text-primary mb-8">
+            Join a Popqiz
+          </h1>
+          <div className="text-center text-text-secondary">Loading...</div>
+        </div>
+      </main>
+    }>
+      <JoinPageContent />
+    </Suspense>
   );
 }
 
