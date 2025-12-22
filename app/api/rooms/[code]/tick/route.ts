@@ -1,0 +1,189 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
+import { getRandomQuestion } from '@/lib/questions';
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  try {
+    const code = params.code;
+    const supabase = createServerClient();
+
+    // Get room
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('code', code.toUpperCase())
+      .single();
+
+    if (roomError || !room) {
+      return NextResponse.json(
+        { error: 'Room not found' },
+        { status: 404 }
+      );
+    }
+
+    const now = new Date();
+    const roundEndsAt = room.round_ends_at ? new Date(room.round_ends_at) : null;
+
+    // Check if round should end
+    const shouldEndRound =
+      !roundEndsAt || // No end time set
+      now >= roundEndsAt || // Time expired
+      (await allPlayersAnswered(supabase, room.id, room.round_number)); // All answered
+
+    if (!shouldEndRound) {
+      return NextResponse.json({ ok: true, advanced: false });
+    }
+
+    // Score the round
+    await scoreRound(supabase, room.id, room.round_number, room.current_question_id!);
+
+    // Advance to next round
+    const nextQuestion = await getRandomQuestion(room.age_band);
+    // Add 3 seconds for leaderboard display + 20 seconds for question = 23 seconds total
+    const nextRoundEndsAt = new Date(Date.now() + 23 * 1000);
+
+    const { error: updateError } = await supabase
+      .from('rooms')
+      .update({
+        round_number: room.round_number + 1,
+        current_question_id: nextQuestion.id,
+        round_ends_at: nextRoundEndsAt.toISOString(),
+      })
+      .eq('id', room.id);
+
+    if (updateError) {
+      return NextResponse.json(
+        { error: 'Failed to advance round', details: updateError },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, advanced: true });
+  } catch (error) {
+    console.error('Error ticking room:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+async function allPlayersAnswered(
+  supabase: ReturnType<typeof createServerClient>,
+  roomId: string,
+  roundNumber: number
+): Promise<boolean> {
+  // Get all players in room
+  const { data: players } = await supabase
+    .from('players')
+    .select('id')
+    .eq('room_id', roomId);
+
+  if (!players || players.length === 0) {
+    return false;
+  }
+
+  // Get all answers for this round
+  const { data: answers } = await supabase
+    .from('answers')
+    .select('player_id')
+    .eq('room_id', roomId)
+    .eq('round_number', roundNumber);
+
+  const answeredPlayerIds = new Set(answers?.map((a) => a.player_id) || []);
+  return players.every((p) => answeredPlayerIds.has(p.id));
+}
+
+async function scoreRound(
+  supabase: ReturnType<typeof createServerClient>,
+  roomId: string,
+  roundNumber: number,
+  questionId: string
+): Promise<void> {
+  // Get correct answer index
+  const { data: question } = await supabase
+    .from('question_cache')
+    .select('correct_index')
+    .eq('id', questionId)
+    .single();
+
+  if (!question) {
+    return;
+  }
+
+  // Get all answers for this round
+  const { data: answers } = await supabase
+    .from('answers')
+    .select('*')
+    .eq('room_id', roomId)
+    .eq('round_number', roundNumber);
+
+  if (!answers || answers.length === 0) {
+    return;
+  }
+
+  // Find correct answers
+  const correctAnswers = answers.filter(
+    (a) => a.answer_index === question.correct_index
+  );
+
+  if (correctAnswers.length === 0) {
+    // No correct answers, update is_correct flags
+    for (const answer of answers) {
+      await supabase
+        .from('answers')
+        .update({ is_correct: false })
+        .eq('id', answer.id);
+    }
+    return;
+  }
+
+  // Award +1 for each correct answer
+  for (const answer of correctAnswers) {
+    // Update answer is_correct flag
+    await supabase
+      .from('answers')
+      .update({ is_correct: true })
+      .eq('id', answer.id);
+
+    // Update player score
+    const { data: player } = await supabase
+      .from('players')
+      .select('score')
+      .eq('id', answer.player_id)
+      .single();
+
+    if (player) {
+      await supabase
+        .from('players')
+        .update({ score: player.score + 1 })
+        .eq('id', answer.player_id);
+    }
+  }
+
+  // Award +1 bonus to first correct answer (earliest created_at)
+  const sortedCorrect = correctAnswers.sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const firstCorrect = sortedCorrect[0];
+
+  if (firstCorrect) {
+    const { data: player } = await supabase
+      .from('players')
+      .select('score')
+      .eq('id', firstCorrect.player_id)
+      .single();
+
+    if (player) {
+      await supabase
+        .from('players')
+        .update({ score: player.score + 1 })
+        .eq('id', firstCorrect.player_id);
+    }
+  }
+}
+
