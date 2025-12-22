@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { getRandomQuestion } from '@/lib/questions';
+import { getNextQuestionForRoom } from '@/lib/questions';
 import { assignTeamColorAndName } from '@/lib/utils';
 
 export async function POST(
@@ -62,8 +62,16 @@ export async function POST(
       }
     }
 
-    // Get new question
-    const question = await getRandomQuestion(room.age_band);
+    // Clear room question history so the new game starts fresh.
+    await supabase.from('room_questions').delete().eq('room_id', room.id);
+
+    // Get new question (round 1) and record it for this room.
+    const question = await getNextQuestionForRoom({
+      roomId: room.id,
+      ageBand: room.age_band,
+      roundNumber: 1,
+      minQualityScore: 70,
+    });
     const roundEndsAt = new Date(Date.now() + 20 * 1000); // 20 seconds
 
     // Reset room state

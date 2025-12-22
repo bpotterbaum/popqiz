@@ -48,6 +48,19 @@ Global UX Rules
 
 -   The game never stops to ask for feedback
 
+-   **Mobile-first design**: No hover states (mobile web app) - all interactions use active/tap states only
+
+* * * * *
+
+Mobile Interaction Patterns
+----------------------------
+
+-   **No hover states**: This is a mobile web app, so all interactive elements use tap/active states only
+
+-   **Touch-friendly feedback**: Buttons use `active:scale-[0.98]` for visual feedback on tap
+
+-   **Subtle UI elements**: Secondary actions (like "Something looks off") use reduced opacity (40%) to maintain subtlety without relying on hover
+
 * * * * *
 
 Visual Direction (Modern + Fun)
@@ -65,13 +78,17 @@ Visual Direction (Modern + Fun)
 
 ### Base Canvas
 
--   **Background:** `#F7F8FA` (soft cool off-white)
+-   **Background:** `#00486D` (dark blue)
 
 -   **Surface / cards:** `#FFFFFF`
 
--   **Primary text:** `#1F2937` (charcoal, not black)
+-   **Primary text:** `#FFFFFF` (white for dark background)
 
--   **Secondary text:** `#6B7280`
+-   **Primary text (dark):** `#1F2937` (charcoal for light surfaces)
+
+-   **Secondary text:** `#E0E0E0` (light gray for dark background)
+
+-   **Secondary text (dark):** `#6B7280` (medium gray for light surfaces)
 
 * * * * *
 
@@ -80,7 +97,11 @@ Brand & Action Color
 
 Used for primary CTAs and focus states.
 
--   **Indigo:** `#6366F1`
+-   **Brand (Primary):** `#FCB107` (gold/yellow)
+
+-   **Secondary:** `#02ACC2` (teal/cyan)
+
+-   **Tertiary:** `#E50846` (red/pink)
 
 * * * * *
 
@@ -89,15 +110,21 @@ Team Colors (Refined, Not Primary)
 
 These replace harsh red/blue/green.
 
--   **Orchid:** `#C084FC`
+-   **Yellow:** `#FDBA2D`
 
--   **Sky Blue:** `#60A5FA`
+-   **Teal:** `#2EC4D6`
 
--   **Mint:** `#34D399`
+-   **Red:** `#E63946`
 
--   **Peach:** `#FB7185`
+-   **Orange:** `#F77F00`
 
--   **Gold:** `#FBBF24`
+-   **Light Blue:** `#7ED6DF`
+
+-   **Pink:** `#FF85C0`
+
+-   **Lime:** `#B6E600`
+
+-   **White:** `#FFFFFF`
 
 Rules:
 
@@ -125,11 +152,11 @@ Team Names
 Feedback & Status Colors
 ------------------------
 
--   **Correct / success:** `#22C55E`
+-   **Correct / success:** `#22C55E` (green)
 
--   **Skip / neutral:** `#9CA3AF`
+-   **Skip / neutral:** `#9CA3AF` (gray)
 
--   **Warning / inappropriate:** `#F97316`
+-   **Warning / inappropriate:** `#F97316` (orange)
 
 Avoid pure red for errors.
 
@@ -259,7 +286,7 @@ Join a game quickly using a code.
 
 -   Top-right:
 
-    -   **More menu** (⋯ icon) containing:
+    -   **More menu** (⋯ icon, no hover state - mobile-first design) containing:
 
         -   Invite Players
 
@@ -286,7 +313,7 @@ Answer instantly with zero UI friction.
 
 -   Three stacked answer buttons (very large tap targets)
 
--   Bottom-center (pinned): **"Something looks off"** link (subtle, small text)
+-   Bottom-center (pinned): **"Something looks off"** link (subtle, small text, semi-transparent white at 40% opacity for subtlety)
 
 ### Interaction
 
@@ -391,11 +418,11 @@ More menu → **Invite Players**
 
 -   Room code (large, tappable to copy)
 
--   QR code placeholder
+-   QR code (styled with fluid rounded modules and rounded corner markers using react-qrcode-pretty library)
 
 -   **Share Link** button (primary - uses native share sheet if available, falls back to copy)
 
--   **Copy Link** button (secondary - always copies to clipboard)
+-   **Copy Link** button (secondary - always copies to clipboard, uses dark text for readability)
 
 ### Rules
 

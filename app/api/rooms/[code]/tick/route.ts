@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { getRandomQuestion } from '@/lib/questions';
+import { getNextQuestionForRoom } from '@/lib/questions';
 
 export async function POST(
   request: NextRequest,
@@ -41,7 +41,12 @@ export async function POST(
     await scoreRound(supabase, room.id, room.round_number, room.current_question_id!);
 
     // Advance to next round
-    const nextQuestion = await getRandomQuestion(room.age_band);
+    const nextQuestion = await getNextQuestionForRoom({
+      roomId: room.id,
+      ageBand: room.age_band,
+      roundNumber: room.round_number + 1,
+      minQualityScore: 70,
+    });
     // Add 3 seconds for leaderboard display + 20 seconds for question = 23 seconds total
     const nextRoundEndsAt = new Date(Date.now() + 23 * 1000);
 

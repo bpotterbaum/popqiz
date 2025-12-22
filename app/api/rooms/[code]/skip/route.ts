@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { getRandomQuestion } from '@/lib/questions';
+import { getNextQuestionForRoom } from '@/lib/questions';
 
 export async function POST(
   request: NextRequest,
@@ -51,7 +51,12 @@ export async function POST(
     }
 
     // Immediately advance to next question (no points awarded)
-    const nextQuestion = await getRandomQuestion(room.age_band);
+    const nextQuestion = await getNextQuestionForRoom({
+      roomId: room.id,
+      ageBand: room.age_band,
+      roundNumber: room.round_number + 1,
+      minQualityScore: 70,
+    });
     const roundEndsAt = new Date(Date.now() + 20 * 1000);
 
     const { error: updateError } = await supabase

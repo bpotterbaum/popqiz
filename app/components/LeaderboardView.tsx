@@ -110,7 +110,6 @@ export default function LeaderboardView({
                   ? `0 0 0 4px ${team.color}80, 0 12px 24px -6px rgba(0, 0, 0, 0.25)`
                   : "0 8px 16px -4px rgba(0, 0, 0, 0.2)",
                 padding: "1.25rem 1.5rem",
-                ringColor: team.color,
               }}
             >
               {/* Left section: Rank and Team Info */}

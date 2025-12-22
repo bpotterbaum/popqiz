@@ -42,11 +42,29 @@ CREATE TABLE question_cache (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   age_band age_band NOT NULL,
   question TEXT NOT NULL,
+  -- Normalized hash for de-duping questions per age band
+  question_hash TEXT,
   choices JSONB NOT NULL, -- array of 3 strings
   correct_index INTEGER NOT NULL CHECK (correct_index >= 0 AND correct_index <= 2),
   explanation TEXT,
   quality_score INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Prevent duplicate questions per age band (best-effort; allows nulls if backfilled later)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_question_cache_age_hash_unique
+  ON question_cache(age_band, question_hash)
+  WHERE question_hash IS NOT NULL;
+
+-- Track which questions have been served per room/round to avoid repeats within a session.
+CREATE TABLE room_questions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  round_number INTEGER NOT NULL,
+  question_id UUID NOT NULL REFERENCES question_cache(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(room_id, round_number),
+  UNIQUE(room_id, question_id)
 );
 
 -- Answers table
@@ -79,6 +97,8 @@ CREATE INDEX idx_answers_room_id ON answers(room_id);
 CREATE INDEX idx_answers_room_round ON answers(room_id, round_number);
 CREATE INDEX idx_question_cache_age_band ON question_cache(age_band);
 CREATE INDEX idx_question_feedback_question_id ON question_feedback(question_id);
+CREATE INDEX idx_room_questions_room_id ON room_questions(room_id);
+CREATE INDEX idx_room_questions_room_round ON room_questions(room_id, round_number);
 
 -- Row Level Security (RLS) policies
 ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
@@ -86,6 +106,7 @@ ALTER TABLE players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_questions ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access to rooms (for joining)
 CREATE POLICY "Anyone can read rooms" ON rooms FOR SELECT USING (true);
@@ -98,6 +119,9 @@ CREATE POLICY "Anyone can read answers in rooms" ON answers FOR SELECT USING (tr
 
 -- Allow public read access to question cache
 CREATE POLICY "Anyone can read question cache" ON question_cache FOR SELECT USING (true);
+
+-- Allow public read access to room_questions (for clients that may want to show history later)
+CREATE POLICY "Anyone can read room_questions" ON room_questions FOR SELECT USING (true);
 
 -- Allow service role to insert/update (via API routes)
 -- Note: In production, you'd want more restrictive policies
@@ -117,6 +141,12 @@ CREATE POLICY "Allow insert to answers" ON answers FOR INSERT WITH CHECK (true);
 
 -- Allow inserts to question_feedback
 CREATE POLICY "Allow insert to question_feedback" ON question_feedback FOR INSERT WITH CHECK (true);
+
+-- Allow inserts to room_questions (server records questions served)
+CREATE POLICY "Allow insert to room_questions" ON room_questions FOR INSERT WITH CHECK (true);
+
+-- Allow deletes from room_questions (for reset/new game)
+CREATE POLICY "Allow delete from room_questions" ON room_questions FOR DELETE USING (true);
 
 -- Enable Realtime for tables (must be done after tables are created)
 ALTER PUBLICATION supabase_realtime ADD TABLE rooms;

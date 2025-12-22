@@ -69,6 +69,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Record the first question for this room to avoid repeats in-session.
+    // Use round_number from room (defaults to 1).
+    await supabase.from('room_questions').insert({
+      room_id: room.id,
+      round_number: room.round_number,
+      question_id: question.id,
+    });
+
     // Create first player (host)
     const { color, name } = assignTeamColorAndName([]);
     const { data: player, error: playerError } = await supabase
