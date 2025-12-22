@@ -148,6 +148,30 @@ export function getTeamColorHex(color: string): string {
   return colorMap[color] || '#6366F1'; // Default to brand color
 }
 
+// Calculate luminance of a color (0-1, higher = lighter)
+function getLuminance(hex: string): number {
+  // Remove # if present
+  const rgb = hex.replace('#', '');
+  const r = parseInt(rgb.substring(0, 2), 16) / 255;
+  const g = parseInt(rgb.substring(2, 4), 16) / 255;
+  const b = parseInt(rgb.substring(4, 6), 16) / 255;
+  
+  // Apply gamma correction
+  const [rLin, gLin, bLin] = [r, g, b].map(val => 
+    val <= 0.03928 ? val / 12.92 : Math.pow((val + 0.055) / 1.055, 2.4)
+  );
+  
+  // Calculate relative luminance
+  return 0.2126 * rLin + 0.7152 * gLin + 0.0722 * bLin;
+}
+
+// Determine if text should be dark or light based on background color
+export function getTextColorForBackground(backgroundColor: string): string {
+  const luminance = getLuminance(backgroundColor);
+  // If background is light (luminance > 0.5), use dark text, otherwise use light text
+  return luminance > 0.5 ? '#1F2937' : '#FFFFFF';
+}
+
 // Assign team color and name based on existing players
 export function assignTeamColorAndName(existingPlayers: Array<{ team_color: string; team_name: string }>): { color: TeamColor; name: string } {
   const usedColors = new Set(existingPlayers.map(p => p.team_color));

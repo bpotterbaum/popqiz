@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getTextColorForBackground } from "@/lib/utils";
 
 interface Team {
   name: string;
@@ -23,6 +24,7 @@ export default function LeaderboardView({
   const [highlightedTeams, setHighlightedTeams] = useState<Set<string>>(new Set());
   const [countdown, setCountdown] = useState(3);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [animatedScores, setAnimatedScores] = useState<Map<string, number>>(new Map());
 
   // Countdown timer
   useEffect(() => {
@@ -54,20 +56,73 @@ export default function LeaderboardView({
   // Calculate score changes and highlight teams that gained points
   useEffect(() => {
     const newHighlights = new Set<string>();
+    const newAnimatedScores = new Map<string, number>();
+    const animationIntervals: NodeJS.Timeout[] = [];
+    
     sortedTeams.forEach((team) => {
       const previousScore = previousScores.get(team.name) || 0;
-      if (team.score > previousScore) {
+      const currentScore = team.score;
+      const pointsToAdd = currentScore - previousScore;
+      
+      // Only animate if NEW POINTS were added (player got answer correct)
+      // If no new points, show the score immediately without animation
+      if (pointsToAdd > 0) {
+        // Player got points - animate the new points being added
         newHighlights.add(team.name);
+        
+        // Start from previous score and animate up to current score
+        newAnimatedScores.set(team.name, previousScore);
+        
+        // Animate only the NEW points being added
+        const duration = 800; // ms
+        const steps = 30;
+        const stepDuration = duration / steps;
+        const stepIncrement = pointsToAdd / steps;
+        
+        let currentStep = 0;
+        const animateInterval = setInterval(() => {
+          currentStep++;
+          const newScore = Math.min(
+            previousScore + stepIncrement * currentStep,
+            currentScore
+          );
+          setAnimatedScores((prev) => {
+            const updated = new Map(prev);
+            updated.set(team.name, Math.round(newScore));
+            return updated;
+          });
+          
+          if (currentStep >= steps) {
+            clearInterval(animateInterval);
+            setAnimatedScores((prev) => {
+              const updated = new Map(prev);
+              updated.set(team.name, currentScore);
+              return updated;
+            });
+          }
+        }, stepDuration);
+        
+        animationIntervals.push(animateInterval);
+      } else {
+        // No new points added (wrong answer or no answer)
+        // Show the score immediately - NO ANIMATION
+        newAnimatedScores.set(team.name, currentScore);
       }
     });
+    
     setHighlightedTeams(newHighlights);
+    setAnimatedScores(newAnimatedScores);
 
     // Remove highlight after animation
     const timer = setTimeout(() => {
       setHighlightedTeams(new Set());
     }, 2000);
 
-    return () => clearTimeout(timer);
+    // Cleanup animation intervals and timer on unmount or when dependencies change
+    return () => {
+      animationIntervals.forEach(interval => clearInterval(interval));
+      clearTimeout(timer);
+    };
   }, [teams, previousScores]);
 
   const getPointsGained = (teamName: string): number => {
@@ -97,6 +152,10 @@ export default function LeaderboardView({
             return `${index + 1}th`;
           };
 
+          // Determine text color based on background for readability
+          const textColor = getTextColorForBackground(team.color);
+          const isLightBackground = textColor === '#1F2937';
+
           return (
             <div
               key={team.name}
@@ -117,10 +176,11 @@ export default function LeaderboardView({
                 {/* Rank indicator */}
                 <div className="flex-shrink-0">
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white shadow-md"
+                    className="w-12 h-12 rounded-xl flex items-center justify-center font-bold shadow-md"
                     style={{
-                      backgroundColor: "rgba(255, 255, 255, 0.25)",
+                      backgroundColor: isLightBackground ? "rgba(0, 0, 0, 0.15)" : "rgba(255, 255, 255, 0.25)",
                       backdropFilter: "blur(8px)",
+                      color: textColor,
                     }}
                   >
                     <span className="text-sm font-bold">
@@ -130,7 +190,10 @@ export default function LeaderboardView({
                 </div>
 
                 {/* Team name */}
-                <span className="text-xl font-bold text-white truncate drop-shadow-sm">
+                <span 
+                  className="text-xl font-bold truncate drop-shadow-sm"
+                  style={{ color: textColor }}
+                >
                   {team.name}
                 </span>
               </div>
@@ -143,8 +206,8 @@ export default function LeaderboardView({
                     <div
                       className="rounded-lg px-3 py-1.5 font-bold text-sm animate-pulse flex items-center shadow-lg"
                       style={{
-                        backgroundColor: "rgba(255, 255, 255, 0.95)",
-                        color: team.color,
+                        backgroundColor: isLightBackground ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.95)",
+                        color: isLightBackground ? textColor : team.color,
                       }}
                     >
                       +{pointsGained} points
@@ -152,13 +215,14 @@ export default function LeaderboardView({
                   </div>
                 )}
                 
-                {/* Total score */}
+                {/* Total score - animated */}
                 <span
-                  className={`text-3xl font-bold tabular-nums text-white drop-shadow-md transition-all duration-300 ${
+                  className={`text-3xl font-bold tabular-nums drop-shadow-md transition-all duration-300 ${
                     isHighlighted ? "scale-110" : ""
                   }`}
+                  style={{ color: textColor }}
                 >
-                  {team.score}
+                  {animatedScores.get(team.name) ?? team.score}
                 </span>
               </div>
             </div>

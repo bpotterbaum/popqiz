@@ -108,6 +108,16 @@ async function scoreRound(
   roundNumber: number,
   questionId: string
 ): Promise<void> {
+  // Get room to find round_ends_at for timing calculations
+  const { data: room } = await supabase
+    .from('rooms')
+    .select('round_ends_at')
+    .eq('id', roomId)
+    .single();
+
+  const roundEndsAt = room?.round_ends_at ? new Date(room.round_ends_at).getTime() : null;
+  const roundDuration = 20 * 1000; // 20 seconds in milliseconds
+
   // Get correct answer index
   const { data: question } = await supabase
     .from('question_cache')
@@ -136,22 +146,50 @@ async function scoreRound(
   );
 
   if (correctAnswers.length === 0) {
-    // No correct answers, update is_correct flags
+    // No correct answers, update is_correct flags and set points to 0
     for (const answer of answers) {
       await supabase
         .from('answers')
-        .update({ is_correct: false })
+        .update({ is_correct: false, points: 0 })
         .eq('id', answer.id);
     }
     return;
   }
 
-  // Award +1 for each correct answer
+  // Calculate points for each correct answer based on time remaining
+  const basePoints = 500;
+  
   for (const answer of correctAnswers) {
-    // Update answer is_correct flag
+    let points = 0;
+    let multiplier = 1.0;
+
+    if (roundEndsAt && answer.answered_at) {
+      const answeredAt = new Date(answer.answered_at).getTime();
+      const timeRemaining = Math.max(0, roundEndsAt - answeredAt);
+      const timeRemainingPercent = timeRemaining / roundDuration;
+
+      // Determine speed multiplier based on time remaining
+      if (timeRemainingPercent >= 0.75) {
+        // Top 25% of timer
+        multiplier = 1.5;
+      } else if (timeRemainingPercent >= 0.5) {
+        // 25-50%
+        multiplier = 1.25;
+      } else if (timeRemainingPercent >= 0.25) {
+        // 50-75%
+        multiplier = 1.0;
+      } else {
+        // Bottom 25%
+        multiplier = 0.75;
+      }
+    }
+
+    points = Math.round(basePoints * multiplier);
+
+    // Update answer with is_correct and points
     await supabase
       .from('answers')
-      .update({ is_correct: true })
+      .update({ is_correct: true, points })
       .eq('id', answer.id);
 
     // Update player score
@@ -164,31 +202,20 @@ async function scoreRound(
     if (player) {
       await supabase
         .from('players')
-        .update({ score: player.score + 1 })
+        .update({ score: player.score + points })
         .eq('id', answer.player_id);
     }
   }
 
-  // Award +1 bonus to first correct answer (earliest created_at)
-  const sortedCorrect = correctAnswers.sort(
-    (a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  // Update incorrect answers with 0 points
+  const incorrectAnswers = answers.filter(
+    (a) => a.answer_index !== question.correct_index
   );
-  const firstCorrect = sortedCorrect[0];
-
-  if (firstCorrect) {
-    const { data: player } = await supabase
-      .from('players')
-      .select('score')
-      .eq('id', firstCorrect.player_id)
-      .single();
-
-    if (player) {
-      await supabase
-        .from('players')
-        .update({ score: player.score + 1 })
-        .eq('id', firstCorrect.player_id);
-    }
+  for (const answer of incorrectAnswers) {
+    await supabase
+      .from('answers')
+      .update({ is_correct: false, points: 0 })
+      .eq('id', answer.id);
   }
 }
 

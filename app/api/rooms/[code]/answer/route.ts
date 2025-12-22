@@ -25,10 +25,10 @@ export async function POST(
 
     const supabase = createServerClient();
 
-    // Get room
+    // Get room with round_ends_at for timing
     const { data: room, error: roomError } = await supabase
       .from('rooms')
-      .select('id, current_question_id, round_number')
+      .select('id, current_question_id, round_number, round_ends_at')
       .eq('code', code.toUpperCase())
       .single();
 
@@ -69,7 +69,8 @@ export async function POST(
 
     const isCorrect = question?.correct_index === answer_index;
 
-    // Insert answer (is_correct will be set by server during scoring)
+    // Insert answer with timestamp for time-based scoring
+    const answeredAt = new Date().toISOString();
     const { error: answerError } = await supabase
       .from('answers')
       .insert({
@@ -79,6 +80,7 @@ export async function POST(
         question_id: room.current_question_id!,
         answer_index,
         is_correct: isCorrect,
+        answered_at: answeredAt,
       });
 
     if (answerError) {

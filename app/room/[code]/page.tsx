@@ -10,7 +10,7 @@ import InviteSheet from "@/app/components/InviteSheet";
 import QuestionControlsSheet from "@/app/components/QuestionControlsSheet";
 import MoreMenu from "@/app/components/MoreMenu";
 
-type GameState = "loading" | "question" | "leaderboard";
+type GameState = "loading" | "question" | "reveal" | "leaderboard";
 
 interface Room {
   id: string;
@@ -32,6 +32,7 @@ interface Question {
   id: string;
   question: string;
   choices: string[];
+  correct_index?: number;
 }
 
 export default function RoomPage() {
@@ -44,7 +45,9 @@ export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const revealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [myTeamColor, setMyTeamColor] = useState<string>("#6366F1");
   const [myTeamName, setMyTeamName] = useState<string>("");
   const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
@@ -148,7 +151,7 @@ export default function RoomPage() {
   async function loadQuestion(questionId: string) {
     const { data, error } = await supabase
       .from("question_cache")
-      .select("id, question, choices")
+      .select("id, question, choices, correct_index")
       .eq("id", questionId)
       .single();
 
@@ -161,7 +164,13 @@ export default function RoomPage() {
       id: data.id,
       question: data.question,
       choices: data.choices as string[],
+      correct_index: data.correct_index,
     });
+    
+    // Store correct answer index for reveal phase
+    if (data.correct_index !== undefined) {
+      setCorrectAnswerIndex(data.correct_index);
+    }
   }
 
   // Transition to question state (helper function)
@@ -284,11 +293,33 @@ export default function RoomPage() {
 
             setPreviousRoundNumber(updatedRoom.round_number);
             setSelectedAnswer(null);
+            setCorrectAnswerIndex(null);
             setRoundWinner(undefined);
             setRoom(updatedRoom);
 
-            // Show leaderboard
-            setGameState("leaderboard");
+            // Clear reveal timeout if it exists
+            if (revealTimeoutRef.current) {
+              clearTimeout(revealTimeoutRef.current);
+              revealTimeoutRef.current = null;
+            }
+
+            // If we're in reveal phase, transition to leaderboard
+            // If we're still in question phase, transition to reveal first, then leaderboard
+            if (gameStateRef.current === "reveal") {
+              setGameState("leaderboard");
+            } else if (gameStateRef.current === "question") {
+              // We should have transitioned to reveal, but if we haven't, do it now
+              // Then transition to leaderboard after reveal duration
+              setGameState("reveal");
+              if (revealTimeoutRef.current) {
+                clearTimeout(revealTimeoutRef.current);
+              }
+              revealTimeoutRef.current = setTimeout(() => {
+                setGameState("leaderboard");
+              }, 1200);
+            } else {
+              setGameState("leaderboard");
+            }
             leaderboardStartTimeRef.current = Date.now();
 
             // Clear any existing timeout
@@ -326,6 +357,7 @@ export default function RoomPage() {
               setRoom(updatedRoom);
               await loadQuestion(updatedRoom.current_question_id);
               setSelectedAnswer(null);
+              setCorrectAnswerIndex(null);
               setGameState("question");
             } else {
               // We're showing leaderboard, just update room but don't change state
@@ -385,8 +417,53 @@ export default function RoomPage() {
       if (leaderboardTimeoutRef.current) {
         clearTimeout(leaderboardTimeoutRef.current);
       }
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+      }
     };
   }, [room?.id]); // Only recreate subscription when room ID changes
+
+  // Check for round end and transition to reveal phase
+  useEffect(() => {
+    if (!room || gameState !== "question" || !room.round_ends_at) return;
+
+    const checkRoundEnd = () => {
+      const now = new Date().getTime();
+      const roundEndsAt = new Date(room.round_ends_at!).getTime();
+      const timeRemaining = roundEndsAt - now;
+      const timeExpired = timeRemaining <= 0;
+      const timeAlmostExpired = timeRemaining <= 500; // Within 500ms of expiring
+
+      // Show reveal phase if:
+      // 1. Timer has expired, OR
+      // 2. Player has answered (they want to see the result)
+      const shouldShowReveal = timeExpired || selectedAnswer !== null;
+
+      if (shouldShowReveal && gameStateRef.current === "question") {
+        // Transition to reveal phase
+        setGameState("reveal");
+        
+        // After 1200ms, the server tick will handle transition to leaderboard
+        // But we set a timeout as backup
+        if (revealTimeoutRef.current) {
+          clearTimeout(revealTimeoutRef.current);
+        }
+        revealTimeoutRef.current = setTimeout(() => {
+          // Server will handle the actual transition, but this ensures we don't get stuck
+        }, 1200);
+      }
+    };
+
+    const interval = setInterval(checkRoundEnd, 100);
+    checkRoundEnd(); // Check immediately
+
+    return () => {
+      clearInterval(interval);
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+      }
+    };
+  }, [room, gameState, selectedAnswer]);
 
   // Set up tick interval (host pings server every 2s)
   useEffect(() => {
@@ -427,6 +504,25 @@ export default function RoomPage() {
           answer_index: answerIndex,
         }),
       });
+
+      // Always show reveal phase after answering so player can see the result
+      // This ensures they always see whether they got it right or wrong
+      if (gameStateRef.current === "question") {
+        // Show reveal phase after a brief delay to let answer submit
+        setTimeout(() => {
+          if (gameStateRef.current === "question") {
+            setGameState("reveal");
+            
+            // Set timeout for reveal phase duration (1200ms)
+            if (revealTimeoutRef.current) {
+              clearTimeout(revealTimeoutRef.current);
+            }
+            revealTimeoutRef.current = setTimeout(() => {
+              // Server will handle transition to leaderboard via tick
+            }, 1200);
+          }
+        }, 300); // Small delay to let answer submit complete
+      }
     } catch (error) {
       console.error("Error submitting answer:", error);
       setSelectedAnswer(null);
@@ -517,7 +613,7 @@ export default function RoomPage() {
 
       {/* Game Content */}
       <div className="flex-1 flex items-center justify-center">
-        {gameState === "question" ? (
+        {gameState === "question" || gameState === "reveal" ? (
           <QuestionView
             question={currentQuestion.question}
             answers={currentQuestion.choices}
@@ -526,6 +622,8 @@ export default function RoomPage() {
             teamColor={myTeamColor}
             teamName={myTeamName}
             roundEndsAt={room.round_ends_at}
+            correctAnswerIndex={correctAnswerIndex}
+            isRevealPhase={gameState === "reveal"}
           />
         ) : (
           <LeaderboardView
@@ -541,7 +639,7 @@ export default function RoomPage() {
       </div>
 
       {/* Feedback Link - Pinned to Bottom */}
-      {gameState === "question" && (
+      {(gameState === "question" || gameState === "reveal") && (
         <div className="fixed bottom-4 left-0 right-0 flex justify-center z-10">
           <button
             onClick={() => setQuestionControlsOpen(true)}
