@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 type BottomCountdownProps = {
   label?: string;
@@ -8,38 +8,53 @@ type BottomCountdownProps = {
 };
 
 function clampSeconds(ms: number) {
-  return Math.max(0, Math.ceil(ms / 1000));
+  // Use floor so it only shows 0 when we're actually at or past the target (at start of that second)
+  // This prevents showing 0 while there's still time remaining
+  return Math.max(0, Math.floor(ms / 1000));
 }
 
 export default function BottomCountdown({
   label = "Next round begins in",
   targetTimeMs,
+  onReachZero,
 }: BottomCountdownProps) {
   const initial = useMemo(() => clampSeconds(targetTimeMs - Date.now()), [targetTimeMs]);
   const [seconds, setSeconds] = useState(initial);
   const [isAnimating, setIsAnimating] = useState(false);
+  const hasTriggeredRef = useRef(false);
 
   useEffect(() => {
     let raf: number | null = null;
     let interval: NodeJS.Timeout | null = null;
+    hasTriggeredRef.current = false;
 
     const tick = () => {
-      const next = clampSeconds(targetTimeMs - Date.now());
+      const now = Date.now();
+      const msRemaining = targetTimeMs - now;
+      const next = clampSeconds(msRemaining);
       setSeconds(next);
       setIsAnimating(true);
       // Let the CSS transition do the work; reset flag quickly
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => setIsAnimating(false));
+      
+      // Trigger callback when we reach 0 (only once)
+      // Trigger when we've crossed the threshold (next is 0 and we're at or past target time)
+      if (next === 0 && msRemaining <= 0 && !hasTriggeredRef.current && onReachZero) {
+        hasTriggeredRef.current = true;
+        onReachZero();
+      }
     };
 
     tick();
-    interval = setInterval(tick, 250);
+    // Update more frequently for accuracy
+    interval = setInterval(tick, 100);
 
     return () => {
       if (interval) clearInterval(interval);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [targetTimeMs]);
+  }, [targetTimeMs, onReachZero]);
 
   return (
     <div className="w-full px-4 pb-4 pt-3 flex items-center justify-center">

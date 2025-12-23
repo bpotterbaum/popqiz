@@ -47,9 +47,9 @@ export async function POST(
       roundNumber: room.round_number + 1,
       minQualityScore: 70,
     });
-    // Account for: reveal phase (7s) + leaderboard (5s) + question (20s) = 32 seconds total
-    // Round up to 33 seconds to account for any processing delays
-    const nextRoundEndsAt = new Date(Date.now() + 33 * 1000);
+    // Account for: reveal/reflection phase (10s) + question (20s) = 30 seconds total
+    // Round up to 31 seconds to account for any processing delays
+    const nextRoundEndsAt = new Date(Date.now() + 31 * 1000);
 
     const { error: updateError } = await supabase
       .from('rooms')

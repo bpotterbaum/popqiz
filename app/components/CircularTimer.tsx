@@ -15,11 +15,12 @@ export default function CircularTimer({
 }: CircularTimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(() => {
     // Initialize with current remaining time if endTime exists
-    if (!endTime) return 0;
+    if (!endTime) return duration;
     const now = new Date().getTime();
     const end = new Date(endTime).getTime();
-    const remaining = Math.max(0, Math.ceil((end - now) / 1000));
-    return Math.min(duration, remaining);
+    const remaining = Math.max(0, Math.floor((end - now) / 1000));
+    // Don't cap at duration - use actual remaining time, but don't go below 0
+    return remaining;
   });
 
   useEffect(() => {
@@ -31,8 +32,9 @@ export default function CircularTimer({
     const updateTimer = () => {
       const now = new Date().getTime();
       const end = new Date(endTime).getTime();
-      const remaining = Math.max(0, Math.ceil((end - now) / 1000));
-      setTimeRemaining(Math.min(duration, remaining));
+      const remaining = Math.max(0, Math.floor((end - now) / 1000));
+      // Use actual remaining time, not capped at duration
+      setTimeRemaining(remaining);
     };
 
     // Update immediately to sync with endTime
@@ -44,7 +46,7 @@ export default function CircularTimer({
     return () => clearInterval(interval);
   }, [endTime, duration]);
 
-  // Calculate progress - ensure it never exceeds 1.0
+  // Calculate progress based on actual time remaining vs duration
   const progress = endTime ? Math.max(0, Math.min(1, timeRemaining / duration)) : 0;
   
   // Radius calculation: account for stroke width (6px) - half on each side

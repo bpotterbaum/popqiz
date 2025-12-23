@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getOrCreateDeviceId, getTeamColorHex, getTextColorForBackground } from "@/lib/utils";
 import CircularTimer from "@/app/components/CircularTimer";
 import ResultIndicator from "@/app/components/ResultIndicator";
+import BottomCountdown from "@/app/components/BottomCountdown";
 import LeaderboardView from "@/app/components/LeaderboardView";
 import InviteSheet from "@/app/components/InviteSheet";
 import QuestionControlsSheet from "@/app/components/QuestionControlsSheet";
@@ -71,6 +72,7 @@ export default function RoomPage() {
   const [shouldFadeAnswers, setShouldFadeAnswers] = useState(false);
   const [leaderboardOpacity, setLeaderboardOpacity] = useState(0);
   const [nextRoundEndsAt, setNextRoundEndsAt] = useState<string | null>(null);
+  const [revealStartTime, setRevealStartTime] = useState<number | null>(null);
 
   // Keep refs in sync
   useEffect(() => {
@@ -193,6 +195,7 @@ export default function RoomPage() {
     setShouldFadeAnswers(false);
     setLeaderboardOpacity(0);
     setNextRoundEndsAt(null);
+    setRevealStartTime(null);
     
     // Clear current question and set to loading state for clean transition
     setCurrentQuestion(null);
@@ -205,9 +208,17 @@ export default function RoomPage() {
     if (questionIdToLoad) {
       await loadQuestion(questionIdToLoad);
       
-      // Store the current round's end time for use during reveal phase
-      if (latestRoom) {
-        currentRoundEndsAtRef.current = latestRoom.round_ends_at;
+      // Calculate the exact end time for the 20-second question phase
+      // The server sets round_ends_at to include reveal phase (33s total),
+      // but we need exactly 20 seconds for the question phase
+      const questionPhaseEndsAt = new Date(Date.now() + 20 * 1000).toISOString();
+      
+      // Update room state with corrected end time for accurate timer
+      const currentRoomState = roomRef.current;
+      if (currentRoomState) {
+        const roomWithCorrectTimer = { ...currentRoomState, round_ends_at: questionPhaseEndsAt };
+        setRoom(roomWithCorrectTimer);
+        currentRoundEndsAtRef.current = questionPhaseEndsAt;
       }
       
       // Clear previous scores for next round
@@ -344,17 +355,11 @@ export default function RoomPage() {
                   setLeaderboardOpacity(1);
                 }, 0);
               }
-              // Already in reveal phase - reset timeout to give full 7000ms for reading explanation
+              // Transition will be triggered by countdown reaching 0 (no setTimeout needed)
               if (revealTimeoutRef.current) {
                 clearTimeout(revealTimeoutRef.current);
+                revealTimeoutRef.current = null;
               }
-              revealTimeoutRef.current = setTimeout(async () => {
-                // Transition directly to next question (leaderboard already shown during reveal)
-                const questionId = nextQuestionIdRef.current;
-                if (questionId) {
-                  await transitionToQuestion(questionId);
-                }
-              }, 7000);
             } else if (gameStateRef.current === "question") {
               // We should have transitioned to reveal, but if we haven't, do it now
               // Then transition to leaderboard after reveal duration
@@ -366,6 +371,7 @@ export default function RoomPage() {
               setShouldFadeAnswers(false);
               setLeaderboardOpacity(0);
               setNextRoundEndsAt(updatedRoom.round_ends_at);
+              setRevealStartTime(Date.now());
               
               // Start fading answers after 3 seconds
               setTimeout(() => {
@@ -377,16 +383,11 @@ export default function RoomPage() {
                 setLeaderboardOpacity(1);
               }, 3000);
               
+              // Transition will be triggered by countdown reaching 0 (no setTimeout needed)
               if (revealTimeoutRef.current) {
                 clearTimeout(revealTimeoutRef.current);
+                revealTimeoutRef.current = null;
               }
-              revealTimeoutRef.current = setTimeout(async () => {
-                // Transition directly to next question (leaderboard already shown during reveal)
-                const questionId = nextQuestionIdRef.current;
-                if (questionId) {
-                  await transitionToQuestion(questionId);
-                }
-              }, 7000);
               // Don't clear selectedAnswer or correctAnswerIndex yet - keep them for reveal phase
               setRoom(updatedRoom);
             }
@@ -400,12 +401,12 @@ export default function RoomPage() {
               preservedQuestionRef.current = null;
               preservedSelectedAnswerRef.current = null;
               preservedCorrectAnswerIndexRef.current = null;
-              // Set game state to question FIRST, before loading, to prevent checkRoundEnd from triggering
-              setGameState("question");
+              // Update room state FIRST so timer has correct round_ends_at immediately
               setRoom(updatedRoom);
-              await loadQuestion(updatedRoom.current_question_id);
-              // Store the current round's end time for use during reveal phase
               currentRoundEndsAtRef.current = updatedRoom.round_ends_at;
+              // Set game state to question, then load question
+              setGameState("question");
+              await loadQuestion(updatedRoom.current_question_id);
             }
           } else {
             // Just update room state (score changes, etc.)
@@ -476,6 +477,9 @@ export default function RoomPage() {
         setShouldFadeAnswers(false);
         setLeaderboardOpacity(0);
         
+        // Track when reveal phase starts for countdown timer
+        setRevealStartTime(Date.now());
+        
         // Estimate next round end time if not yet available (33 seconds from now)
         if (!nextRoundEndsAt) {
           const estimatedNextRoundEndsAt = new Date(Date.now() + 33 * 1000).toISOString();
@@ -492,19 +496,7 @@ export default function RoomPage() {
           setLeaderboardOpacity(1);
         }, 3000);
         
-        // After 7000ms, transition directly to next question (leaderboard already shown during reveal)
-        if (revealTimeoutRef.current) {
-          clearTimeout(revealTimeoutRef.current);
-        }
-        revealTimeoutRef.current = setTimeout(async () => {
-          // Transition directly to next question after reveal duration
-          if (gameStateRef.current === "reveal") {
-            const questionId = nextQuestionIdRef.current || roomRef.current?.current_question_id;
-            if (questionId) {
-              await transitionToQuestion(questionId);
-            }
-          }
-        }, 7000);
+        // Transition will be triggered by countdown reaching 0 (no setTimeout needed)
       }
     };
 
@@ -568,6 +560,7 @@ export default function RoomPage() {
             setGameState("reveal");
             setShouldFadeAnswers(false);
             setLeaderboardOpacity(0);
+            setRevealStartTime(Date.now());
             
             // Estimate next round end time if not yet available (33 seconds from now)
             if (!nextRoundEndsAt && room) {
@@ -585,13 +578,11 @@ export default function RoomPage() {
               setLeaderboardOpacity(1);
             }, 3000);
             
-            // Set timeout for reveal phase duration (7000ms)
+            // Transition will be triggered by countdown reaching 0 (no setTimeout needed)
             if (revealTimeoutRef.current) {
               clearTimeout(revealTimeoutRef.current);
+              revealTimeoutRef.current = null;
             }
-            revealTimeoutRef.current = setTimeout(() => {
-              // Server will handle transition to leaderboard via tick
-            }, 7000);
           }
         }, 300); // Small delay to let answer submit complete
       }
@@ -700,7 +691,7 @@ export default function RoomPage() {
                   </div>
                 </div>
               ) : (
-                <CircularTimer endTime={gameState === "reveal" ? currentRoundEndsAtRef.current : room.round_ends_at} duration={20} size={60} />
+                <CircularTimer endTime={gameState === "reveal" ? currentRoundEndsAtRef.current : (room?.round_ends_at || currentRoundEndsAtRef.current)} duration={20} size={60} />
               )}
               
               {/* Show explanation below result indicator if player answered */}
@@ -828,8 +819,27 @@ export default function RoomPage() {
         ) : null}
       </div>
 
+      {/* Countdown to next round - shown during reveal phase */}
+      {gameState === "reveal" && revealStartTime && (
+        <div className="fixed bottom-4 left-0 right-0 flex justify-center z-10">
+          <BottomCountdown
+            label="Next round in"
+            targetTimeMs={revealStartTime + 10000}
+            onReachZero={async () => {
+              // Transition directly to next question when countdown reaches 0
+              if (gameStateRef.current === "reveal") {
+                const questionId = nextQuestionIdRef.current || roomRef.current?.current_question_id;
+                if (questionId) {
+                  await transitionToQuestion(questionId);
+                }
+              }
+            }}
+          />
+        </div>
+      )}
+
       {/* Feedback Link - Pinned to Bottom */}
-      {(gameState === "question" || gameState === "reveal") && (
+      {gameState === "question" && (
         <div className="fixed bottom-4 left-0 right-0 flex justify-center z-10">
           <button
             onClick={() => setQuestionControlsOpen(true)}
