@@ -9,11 +9,12 @@ import { seedFromOpenTDB } from '@/lib/questions';
  * Body (optional):
  * {
  *   "amount": 50,
- *   "difficulty": "easy" | "medium" | "hard",
- *   "ageBand": "kids" | "tweens" | "family" | "adults"
+ *   "difficulty": "easy" | "medium",
+ *   "ageBand": "adults" (OpenTDB is only used for adults)
  * }
  * 
  * Note: This endpoint respects OpenTDB rate limits (1 request per 5 seconds)
+ * Note: OpenTDB is only used for adults. Kids and tweens use AI-generated questions.
  */
 export async function POST(request: NextRequest) {
   try {

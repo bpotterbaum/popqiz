@@ -82,6 +82,482 @@ function heuristicQualityScore(q: Question): number {
   return score;
 }
 
+// Extra filters to keep kids questions gentle and readable
+function isKidsFriendly(question: string, choices: string[]): boolean {
+  const text = question.trim();
+  const words = text.split(/\s+/);
+  const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
+
+  // Keep questions short and simple
+  if (text.length > 120) return false;
+  if (words.length > 18) return false;
+  if (longestWord > 14) return false;
+
+  // Avoid choices with very long words or phrases
+  const maxChoiceLen = Math.max(...choices.map((c) => c.trim().length));
+  if (maxChoiceLen > 60) return false;
+
+  return true;
+}
+
+const kidsTopics = [
+  'Bluey',
+  'Paw Patrol',
+  'Sesame Street',
+  'Peppa Pig',
+  'Mickey Mouse',
+  'Disney Princesses',
+  'Pixar',
+  'Toy Story',
+  'Super Mario',
+  'Pokémon',
+  'Animals',
+  'Pets',
+  'Dinosaurs',
+  'Colors',
+  'Shapes',
+  'Numbers',
+  'Seasons',
+  'Weather',
+  'Sports for kids',
+  'Snacks and foods kids know',
+  'Playground fun',
+  'Space basics (sun, moon, stars)',
+  'Ocean and beach',
+  'Birthday parties',
+  'Fairy tales',
+  'Bugs and insects',
+];
+
+const tweensTopics = [
+  'Video Games (Minecraft, Fortnite, Roblox, Among Us, etc.)',
+  'Anime (Pokémon, Dragon Ball, Naruto, etc.)',
+  'Superheroes (Marvel, DC)',
+  'Disney movies and shows',
+  'Harry Potter',
+  'Star Wars',
+  'Sports (soccer, basketball, football, etc.)',
+  'Science (space, animals, earth science)',
+  'Geography (countries, capitals, landmarks)',
+  'History (ancient civilizations, explorers, etc.)',
+  'Music (popular artists, instruments, genres)',
+  'Social Media and Internet culture',
+  'Animals and nature',
+  'Technology and computers',
+  'Books and reading',
+  'Art and creativity',
+  'Food and cooking',
+  'Fashion and trends',
+  'Movies and TV shows',
+  'Sports stars and athletes',
+];
+
+type GeneratedKidQuestion = {
+  question: string;
+  choices: string[];
+  correct_index: number;
+  explanation?: string;
+  topic?: string;
+};
+
+type GeneratedTweenQuestion = {
+  question: string;
+  choices: string[];
+  correct_index: number;
+  explanation?: string;
+  topic?: string;
+};
+
+function isSimpleWord(word: string): boolean {
+  return word.length <= 12 && !/[0-9]/.test(word);
+}
+
+function isKidsQuestionValid(q: GeneratedKidQuestion): boolean {
+  if (!q || typeof q.question !== 'string' || !Array.isArray(q.choices)) return false;
+  const question = q.question.trim();
+  const choices = q.choices.map((c) => (typeof c === 'string' ? c.trim() : '')).filter(Boolean);
+
+  if (choices.length < 3 || choices.length > 4) return false;
+  if (new Set(choices.map((c) => c.toLowerCase())).size !== choices.length) return false;
+  if (q.correct_index == null || q.correct_index < 0 || q.correct_index >= choices.length) return false;
+
+  // Length and simplicity checks
+  if (question.length < 8 || question.length > 100) return false;
+  const words = question.split(/\s+/);
+  if (words.length > 18) return false;
+  if (!words.every(isSimpleWord)) return false;
+  if (Math.max(...choices.map((c) => c.length)) > 40) return false;
+
+  // Avoid trivia-ish schooly or numeric-heavy content
+  if (/\d{3,}/.test(question)) return false;
+
+  // Ensure kids-friendliness gate
+  if (!isKidsFriendly(question, choices)) return false;
+
+  return true;
+}
+
+// Generate fun, smile-inducing kids questions via OpenAI with strict validation
+export async function generateKidsAIQuestions(
+  count: number = 20
+): Promise<Question[]> {
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('OpenAI API key not configured - skipping kids AI generation');
+    return [];
+  }
+
+  const topicList = kidsTopics.join(', ');
+
+  const systemPrompt = `You create delightful trivia for kids around age 6.
+Rules:
+- Keep it fun and playful, not schooly.
+- Use simple words and short sentences kids actually know.
+- Topics must come from this list: ${topicList}.
+- Do NOT invent new characters or obscure facts; only well-known kid-friendly facts.
+- No years, no episode numbers, no scores/stats, no violent or scary content.
+- 1 question, 3-4 choices; one clearly correct.
+- Question <= 100 characters; each choice <= 40 characters.
+- Avoid long words (<=12 letters) and long questions (<=18 words).
+- Make kids smile: playful tone, but concise and clear.`;
+
+  const userPrompt = `Generate ${count} kid-friendly trivia questions as JSON.
+
+Return exactly:
+{
+  "questions": [
+    {
+      "question": "text",
+      "choices": ["A", "B", "C", "D"],
+      "correct_index": 0,
+      "explanation": "a thoughtful, informative explanation that teaches something interesting (2-3 sentences, 150-250 characters)",
+      "topic": "one of the allowed topics"
+    }
+  ]
+}
+
+Requirements:
+- Use only allowed topics: ${topicList}
+- No duplicate questions; no duplicate choices within a question.
+- Keep questions short, vivid, and fun. Avoid sounding like a test.
+- Explanations should be informative and educational - explain WHY or HOW, share an interesting fact, or add context that makes kids go "wow!" - but still use simple words kids understand.
+- Keep explanations engaging and delightful, not just restating the answer.
+- No emojis.`;
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.7,
+    max_tokens: Math.max(4000, count * 120), // Allow plenty of tokens for questions with longer explanations
+  });
+
+  const raw = completion.choices[0]?.message?.content?.trim();
+  if (!raw) {
+    console.warn('No response content from OpenAI');
+    return [];
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.error('Failed to parse kids AI JSON:', err);
+    console.error('Raw response length:', raw.length);
+    console.error('Raw response (first 500 chars):', raw.substring(0, 500));
+    console.error('Raw response (last 200 chars):', raw.substring(Math.max(0, raw.length - 200)));
+    
+    // Try to extract JSON from markdown code blocks if present
+    const jsonMatch = raw.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || raw.match(/(\{[\s\S]*\})/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[1]);
+        console.log('Successfully extracted JSON from code block');
+      } catch (retryErr) {
+        // If still failing, try to fix common truncation issues
+        let fixedJson = jsonMatch[1];
+        // If it ends mid-object, try to close it properly
+        if (!fixedJson.trim().endsWith('}')) {
+          // Count unclosed braces and arrays
+          const openBraces = (fixedJson.match(/\{/g) || []).length;
+          const closeBraces = (fixedJson.match(/\}/g) || []).length;
+          const openArrays = (fixedJson.match(/\[/g) || []).length;
+          const closeArrays = (fixedJson.match(/\]/g) || []).length;
+          
+          // Try to close incomplete last question object
+          const lastBraceIndex = fixedJson.lastIndexOf('}');
+          const lastBracketIndex = fixedJson.lastIndexOf(']');
+          if (lastBracketIndex > lastBraceIndex) {
+            // We're inside the questions array
+            // Try to close the last incomplete object and array
+            fixedJson = fixedJson.trim();
+            if (!fixedJson.endsWith(']')) {
+              // Remove trailing comma if present
+              fixedJson = fixedJson.replace(/,\s*$/, '');
+              fixedJson += ']';
+            }
+            if (!fixedJson.endsWith('}')) {
+              fixedJson += '}';
+            }
+          }
+          
+          try {
+            parsed = JSON.parse(fixedJson);
+            console.log('Successfully parsed fixed JSON');
+          } catch (fixErr) {
+            // Last resort: try regex extraction of valid question objects
+            console.warn('JSON repair failed, attempting regex extraction of valid questions...');
+            const questionRegex = /\{\s*"question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"choices"\s*:\s*\[([^\]]+)\]\s*,\s*"correct_index"\s*:\s*(\d+)(?:\s*,\s*"explanation"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)")?(?:\s*,\s*"topic"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)")?\s*\}/g;
+            const extractedQuestions: any[] = [];
+            let match;
+            while ((match = questionRegex.exec(jsonMatch[1])) !== null) {
+              try {
+                const choicesStr = match[2];
+                const choices = choicesStr.match(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)?.map(c => JSON.parse(c)) || [];
+                if (choices.length >= 3 && choices.length <= 4 && parseInt(match[3]) >= 0 && parseInt(match[3]) < choices.length) {
+                  extractedQuestions.push({
+                    question: JSON.parse(`"${match[1]}"`),
+                    choices: choices,
+                    correct_index: parseInt(match[3]),
+                    explanation: match[4] ? JSON.parse(`"${match[4]}"`) : undefined,
+                    topic: match[5] ? JSON.parse(`"${match[5]}"`) : undefined,
+                  });
+                }
+              } catch (extractErr) {
+                // Skip this question
+              }
+            }
+            if (extractedQuestions.length > 0) {
+              console.log(`Extracted ${extractedQuestions.length} valid questions from partial JSON`);
+              parsed = { questions: extractedQuestions };
+            } else {
+              console.error('Failed to extract any valid questions from partial JSON');
+              return [];
+            }
+          }
+        } else {
+          console.error('Failed to parse extracted JSON:', retryErr);
+          return [];
+        }
+      }
+    } else {
+      return [];
+    }
+  }
+
+  const questions: GeneratedKidQuestion[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.questions)
+    ? parsed.questions
+    : [];
+
+  const valid: Question[] = [];
+  for (const q of questions) {
+    if (!isKidsQuestionValid(q)) continue;
+    valid.push({
+      question: q.question.trim(),
+      choices: q.choices.map((c) => c.trim()),
+      correct_index: q.correct_index,
+      explanation: q.explanation?.trim(),
+      source: 'openai',
+    });
+    if (valid.length >= count) break;
+  }
+
+  return valid;
+}
+
+function isTweensQuestionValid(q: GeneratedTweenQuestion): boolean {
+  if (!q || typeof q.question !== 'string' || !Array.isArray(q.choices)) return false;
+  const question = q.question.trim();
+  const choices = q.choices.map((c) => (typeof c === 'string' ? c.trim() : '')).filter(Boolean);
+
+  if (choices.length < 3 || choices.length > 4) return false;
+  if (new Set(choices.map((c) => c.toLowerCase())).size !== choices.length) return false;
+  if (q.correct_index == null || q.correct_index < 0 || q.correct_index >= choices.length) return false;
+
+  // Tweens can handle slightly longer questions and choices than kids
+  if (question.length < 10 || question.length > 150) return false;
+  const words = question.split(/\s+/);
+  if (words.length > 25) return false;
+  if (Math.max(...choices.map((c) => c.length)) > 60) return false;
+
+  return true;
+}
+
+// Generate engaging trivia questions for tweens (ages 10-13) via OpenAI
+export async function generateTweensAIQuestions(
+  count: number = 20
+): Promise<Question[]> {
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('OpenAI API key not configured - skipping tweens AI generation');
+    return [];
+  }
+
+  const topicList = tweensTopics.join(', ');
+
+  const systemPrompt = `You create engaging trivia for tweens (ages 10-13).
+Rules:
+- Keep it fun, interesting, and age-appropriate - not too childish, not too adult.
+- Use vocabulary that tweens understand and find relatable.
+- Topics must come from this list: ${topicList}.
+- Focus on popular culture, games, movies, shows, and topics tweens actually care about.
+- 1 question, 3-4 choices; one clearly correct.
+- Question <= 150 characters; each choice <= 60 characters.
+- Make it engaging and exciting - tweens love to show off what they know.
+- Educational but in a fun, cool way - not boring school stuff.`;
+
+  const userPrompt = `Generate ${count} engaging trivia questions for tweens as JSON.
+
+Return exactly:
+{
+  "questions": [
+    {
+      "question": "text",
+      "choices": ["A", "B", "C", "D"],
+      "correct_index": 0,
+      "explanation": "a thoughtful, informative explanation that teaches something interesting (2-3 sentences, 150-300 characters)",
+      "topic": "one of the allowed topics"
+    }
+  ]
+}
+
+Requirements:
+- Use only allowed topics: ${topicList}
+- No duplicate questions; no duplicate choices within a question.
+- Keep questions engaging, relatable, and fun for tweens.
+- Explanations should be informative and educational - explain WHY or HOW, share interesting facts, or add cool context that makes tweens go "wow!" - use age-appropriate language.
+- Keep explanations engaging and delightful, not just restating the answer.
+- No emojis.`;
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.7,
+    max_tokens: Math.max(4000, count * 130), // Allow plenty of tokens for questions with longer explanations
+  });
+
+  const raw = completion.choices[0]?.message?.content?.trim();
+  if (!raw) {
+    console.warn('No response content from OpenAI');
+    return [];
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.error('Failed to parse tweens AI JSON:', err);
+    console.error('Raw response length:', raw.length);
+    console.error('Raw response (first 500 chars):', raw.substring(0, 500));
+    console.error('Raw response (last 200 chars):', raw.substring(Math.max(0, raw.length - 200)));
+    
+    // Try to extract JSON from markdown code blocks if present
+    const jsonMatch = raw.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || raw.match(/(\{[\s\S]*\})/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[1]);
+        console.log('Successfully extracted JSON from code block');
+      } catch (retryErr) {
+        // If still failing, try to fix common truncation issues
+        let fixedJson = jsonMatch[1];
+        // If it ends mid-object, try to close it properly
+        if (!fixedJson.trim().endsWith('}')) {
+          // Count unclosed braces and arrays
+          const openBraces = (fixedJson.match(/\{/g) || []).length;
+          const closeBraces = (fixedJson.match(/\}/g) || []).length;
+          const openArrays = (fixedJson.match(/\[/g) || []).length;
+          const closeArrays = (fixedJson.match(/\]/g) || []).length;
+          
+          // Try to close incomplete last question object
+          const lastBraceIndex = fixedJson.lastIndexOf('}');
+          const lastBracketIndex = fixedJson.lastIndexOf(']');
+          if (lastBracketIndex > lastBraceIndex) {
+            // We're inside the questions array
+            // Try to close the last incomplete object and array
+            fixedJson = fixedJson.trim();
+            if (!fixedJson.endsWith(']')) {
+              // Remove trailing comma if present
+              fixedJson = fixedJson.replace(/,\s*$/, '');
+              fixedJson += ']';
+            }
+            if (!fixedJson.endsWith('}')) {
+              fixedJson += '}';
+            }
+          }
+          
+          try {
+            parsed = JSON.parse(fixedJson);
+            console.log('Successfully parsed fixed JSON');
+          } catch (fixErr) {
+            // Last resort: try regex extraction of valid question objects
+            console.warn('JSON repair failed, attempting regex extraction of valid questions...');
+            const questionRegex = /\{\s*"question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"choices"\s*:\s*\[([^\]]+)\]\s*,\s*"correct_index"\s*:\s*(\d+)(?:\s*,\s*"explanation"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)")?(?:\s*,\s*"topic"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)")?\s*\}/g;
+            const extractedQuestions: any[] = [];
+            let match;
+            while ((match = questionRegex.exec(jsonMatch[1])) !== null) {
+              try {
+                const choicesStr = match[2];
+                const choices = choicesStr.match(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)?.map(c => JSON.parse(c)) || [];
+                if (choices.length >= 3 && choices.length <= 4 && parseInt(match[3]) >= 0 && parseInt(match[3]) < choices.length) {
+                  extractedQuestions.push({
+                    question: JSON.parse(`"${match[1]}"`),
+                    choices: choices,
+                    correct_index: parseInt(match[3]),
+                    explanation: match[4] ? JSON.parse(`"${match[4]}"`) : undefined,
+                    topic: match[5] ? JSON.parse(`"${match[5]}"`) : undefined,
+                  });
+                }
+              } catch (extractErr) {
+                // Skip this question
+              }
+            }
+            if (extractedQuestions.length > 0) {
+              console.log(`Extracted ${extractedQuestions.length} valid questions from partial JSON`);
+              parsed = { questions: extractedQuestions };
+            } else {
+              console.error('Failed to extract any valid questions from partial JSON');
+              return [];
+            }
+          }
+        } else {
+          console.error('Failed to parse extracted JSON:', retryErr);
+          return [];
+        }
+      }
+    } else {
+      return [];
+    }
+  }
+
+  const questions: GeneratedTweenQuestion[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.questions)
+    ? parsed.questions
+    : [];
+
+  const valid: Question[] = [];
+  for (const q of questions) {
+    if (!isTweensQuestionValid(q)) continue;
+    valid.push({
+      question: q.question.trim(),
+      choices: q.choices.map((c) => c.trim()),
+      correct_index: q.correct_index,
+      explanation: q.explanation?.trim(),
+      source: 'openai',
+    });
+    if (valid.length >= count) break;
+  }
+
+  return valid;
+}
+
 // Map OpenTDB difficulty to age bands
 function mapDifficultyToAgeBand(difficulty: 'easy' | 'medium' | 'hard'): AgeBand[] {
   switch (difficulty) {
@@ -111,12 +587,14 @@ interface OpenTDBResponse {
   results: OpenTDBQuestion[];
 }
 
+// Seed questions from OpenTDB API
+// NOTE: OpenTDB is only used for adults. Kids and tweens use AI-generated questions.
 export async function seedFromOpenTDB(
   options?: {
     amount?: number;
     category?: number;
     difficulty?: 'easy' | 'medium' | 'hard';
-    ageBand?: AgeBand;
+    ageBand?: AgeBand; // Should be 'adults' - OpenTDB is only used for adults
     token?: string; // Session token to avoid duplicates
   }
 ): Promise<{ seeded: number; errors: number; token?: string | null }> {
@@ -194,13 +672,14 @@ export async function seedFromOpenTDB(
         let ageBands: AgeBand[];
         
         if (targetAgeBand) {
-          // Validate that the question's ACTUAL difficulty (from OpenTDB) is appropriate for the target age band
-          // This ensures we don't cache inappropriate questions regardless of what was requested
-          const appropriateDifficulties = 
-            targetAgeBand === 'kids' ? ['easy'] :
-            targetAgeBand === 'tweens' ? ['easy', 'medium'] :
-            targetAgeBand === 'family' ? ['easy', 'medium'] :
-            ['medium', 'hard'];
+          // OpenTDB is only used for adults, so validate accordingly
+          if (targetAgeBand !== 'adults') {
+            console.warn(`Skipping OpenTDB question for ${targetAgeBand} - OpenTDB is only used for adults`);
+            continue;
+          }
+          // Validate that the question's ACTUAL difficulty (from OpenTDB) is appropriate for adults
+          // Use easy and medium only (hard is too difficult)
+          const appropriateDifficulties = ['easy', 'medium'];
           
           // Always validate the actual difficulty returned by OpenTDB
           if (!appropriateDifficulties.includes(otq.difficulty)) {
@@ -217,8 +696,14 @@ export async function seedFromOpenTDB(
           
           ageBands = [targetAgeBand];
         } else {
-          // No target specified, use difficulty-based mapping
-          ageBands = mapDifficultyToAgeBand(otq.difficulty);
+          // No target specified - default to adults only (OpenTDB is only used for adults)
+          // Use easy and medium difficulty only (hard is too difficult)
+          if (otq.difficulty === 'easy' || otq.difficulty === 'medium') {
+            ageBands = ['adults'];
+          } else {
+            // Skip hard questions - they're too difficult
+            continue;
+          }
         }
 
         // Generate a single family-friendly explanation for this question (reused across all age bands)
@@ -234,10 +719,17 @@ export async function seedFromOpenTDB(
         };
 
         // Cache for each matching age band (reusing the same explanation)
+        // Note: OpenTDB is only used for adults, so we should only cache to adults
         for (const ageBand of ageBands) {
           try {
+            // Skip if somehow we got a non-adult age band (safety check)
+            if (ageBand !== 'adults') {
+              console.warn(`Skipping caching OpenTDB question for ${ageBand} - OpenTDB is only used for adults`);
+              continue;
+            }
+
             await cacheQuestions(ageBand, [questionObj], { 
-              minQualityScore: 50, // Lower threshold for OpenTDB
+              minQualityScore: 50, // Standard quality threshold for adults
               source: 'opentdb'
             });
             seeded++;

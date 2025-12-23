@@ -34,14 +34,15 @@ async function main() {
   const { seedFromOpenTDB, getOpenTDBSessionToken } = await import('../lib/questions');
   
   // Configuration
-  const TARGET_COUNT = process.env.TARGET_COUNT ? parseInt(process.env.TARGET_COUNT) : 2000; // Default 2000 questions
+  const TARGET_COUNT = process.env.TARGET_COUNT ? parseInt(process.env.TARGET_COUNT) : 30; // Default 30 questions for testing
   const RATE_LIMIT_MS = 6000; // 6 seconds (5s limit + 1s buffer)
   
-  console.log('🚀 Starting OpenTDB bulk seeding...');
+  console.log('🚀 Starting OpenTDB bulk seeding for ADULTS ONLY...');
   console.log(`   Target: ${TARGET_COUNT} new questions`);
   console.log(`   Rate limit: ${RATE_LIMIT_MS / 1000}s between requests\n`);
+  console.log('   Note: OpenTDB is only used for adults. Kids and tweens use AI-generated questions.\n');
   
-  const ageBands = ['kids', 'tweens', 'family', 'adults'] as const;
+  const ageBands = ['adults'] as const;
   
   let totalSeeded = 0;
   let totalErrors = 0;
@@ -65,12 +66,8 @@ async function main() {
   for (const ageBand of ageBands) {
     console.log(`\n📚 Seeding ${ageBand}...`);
     
-    // Map age band to difficulties
-    const relevantDifficulties: ('easy' | 'medium' | 'hard')[] = 
-      ageBand === 'kids' ? ['easy'] :
-      ageBand === 'tweens' ? ['easy', 'medium'] :
-      ageBand === 'family' ? ['easy', 'medium'] :
-      ['medium', 'hard'];
+    // Adults only - use easy and medium difficulty (hard is too difficult)
+    const relevantDifficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium'];
 
     for (const difficulty of relevantDifficulties) {
       // Get a new session token for each difficulty to maximize variety
