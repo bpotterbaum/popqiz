@@ -14,6 +14,7 @@ interface QuestionViewProps {
   roundEndsAt: string | null;
   correctAnswerIndex?: number | null; // For reveal phase
   isRevealPhase?: boolean; // Whether we're in reveal phase
+  explanation?: string; // Optional explanation to display during reveal
 }
 
 export default function QuestionView({
@@ -26,6 +27,7 @@ export default function QuestionView({
   roundEndsAt,
   correctAnswerIndex = null,
   isRevealPhase = false,
+  explanation,
 }: QuestionViewProps) {
   const isCorrect = selectedAnswer !== null && selectedAnswer === correctAnswerIndex;
 
@@ -49,6 +51,17 @@ export default function QuestionView({
         <h2 className="text-lg sm:text-xl font-bold text-center text-text-primary px-2 leading-tight max-w-2xl">
           {question}
         </h2>
+        
+        {/* Explanation (shown during reveal phase if available) */}
+        {isRevealPhase && explanation && (
+          <div className="w-full max-w-2xl px-2">
+            <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 mt-2 w-full">
+              <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
+                {explanation}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Answer Buttons */}

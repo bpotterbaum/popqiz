@@ -33,6 +33,7 @@ interface Question {
   question: string;
   choices: string[];
   correct_index?: number;
+  explanation?: string;
 }
 
 export default function RoomPage() {
@@ -62,6 +63,11 @@ export default function RoomPage() {
   const roomRef = useRef<Room | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
   const scoresBeforeScoringRef = useRef<Map<string, number>>(new Map());
+  const nextQuestionIdRef = useRef<string | null>(null);
+  const currentRoundEndsAtRef = useRef<string | null>(null);
+  const preservedQuestionRef = useRef<Question | null>(null);
+  const preservedSelectedAnswerRef = useRef<number | null>(null);
+  const preservedCorrectAnswerIndexRef = useRef<number | null>(null);
   const deviceId = getOrCreateDeviceId();
 
   // Keep refs in sync
@@ -131,6 +137,8 @@ export default function RoomPage() {
     // Load question if available
     if (data.current_question_id) {
       await loadQuestion(data.current_question_id);
+      // Store the current round's end time for use during reveal phase
+      currentRoundEndsAtRef.current = data.round_ends_at;
     }
 
     // Only determine game state if we're not preserving current state
@@ -151,7 +159,7 @@ export default function RoomPage() {
   async function loadQuestion(questionId: string) {
     const { data, error } = await supabase
       .from("question_cache")
-      .select("id, question, choices, correct_index")
+      .select("id, question, choices, correct_index, explanation")
       .eq("id", questionId)
       .single();
 
@@ -165,6 +173,7 @@ export default function RoomPage() {
       question: data.question,
       choices: data.choices as string[],
       correct_index: data.correct_index,
+      explanation: data.explanation || undefined,
     });
     
     // Store correct answer index for reveal phase
@@ -175,17 +184,33 @@ export default function RoomPage() {
 
   // Transition to question state (helper function)
   async function transitionToQuestion(questionId: string) {
+    // Clear reveal phase data and preserved refs BEFORE loading new question
+    // This is critical - if selectedAnswer is not null, checkRoundEnd will immediately transition to reveal
+    setSelectedAnswer(null);
+    setCorrectAnswerIndex(null);
+    preservedQuestionRef.current = null;
+    preservedSelectedAnswerRef.current = null;
+    preservedCorrectAnswerIndexRef.current = null;
+    
+    // Set game state to question FIRST, before loading, to prevent checkRoundEnd from triggering
+    setGameState("question");
+    
     // Double-check we still have a question (room might have changed)
     const latestRoom = roomRef.current;
     if (latestRoom && latestRoom.current_question_id) {
       await loadQuestion(latestRoom.current_question_id);
-      setGameState("question");
+      // Store the current round's end time for use during reveal phase
+      currentRoundEndsAtRef.current = latestRoom.round_ends_at;
       // Clear previous scores for next round
       setPreviousScores(new Map());
     } else if (questionId) {
       // Fallback to original question ID
       await loadQuestion(questionId);
-      setGameState("question");
+      // Store the current round's end time for use during reveal phase
+      const latestRoom = roomRef.current;
+      if (latestRoom) {
+        currentRoundEndsAtRef.current = latestRoom.round_ends_at;
+      }
       // Clear previous scores for next round
       setPreviousScores(new Map());
     }
@@ -292,59 +317,82 @@ export default function RoomPage() {
             scoresBeforeScoringRef.current = new Map();
 
             setPreviousRoundNumber(updatedRoom.round_number);
-            setSelectedAnswer(null);
-            setCorrectAnswerIndex(null);
             setRoundWinner(undefined);
-            setRoom(updatedRoom);
-
-            // Clear reveal timeout if it exists
-            if (revealTimeoutRef.current) {
-              clearTimeout(revealTimeoutRef.current);
-              revealTimeoutRef.current = null;
+            
+            // Store the next question ID for use in timeouts
+            if (updatedRoom.current_question_id) {
+              nextQuestionIdRef.current = updatedRoom.current_question_id;
             }
 
-            // If we're in reveal phase, transition to leaderboard
-            // If we're still in question phase, transition to reveal first, then leaderboard
+            // Sequential flow: question -> reveal -> leaderboard -> next round
+            // When round advances, we should show leaderboard for the round that just ended
+            // Don't set up timeouts to load next question here - wait until we're actually in leaderboard
             if (gameStateRef.current === "reveal") {
-              setGameState("leaderboard");
+              // Don't update question data, selectedAnswer, or correctAnswerIndex during reveal phase
+              // Preserve them so user can finish reading the explanation
+              // Just update the room state (for other data like scores)
+              setRoom(updatedRoom);
+              // Already in reveal phase - reset timeout to give full 7000ms for reading explanation
+              if (revealTimeoutRef.current) {
+                clearTimeout(revealTimeoutRef.current);
+              }
+              revealTimeoutRef.current = setTimeout(() => {
+                setGameState("leaderboard");
+                leaderboardStartTimeRef.current = Date.now();
+                // Now set up timeout to load next question after showing leaderboard for 5 seconds
+                const questionId = nextQuestionIdRef.current;
+                if (questionId) {
+                  // Clear any existing leaderboard timeout
+                  if (leaderboardTimeoutRef.current) {
+                    clearTimeout(leaderboardTimeoutRef.current);
+                  }
+                  leaderboardTimeoutRef.current = setTimeout(async () => {
+                    await transitionToQuestion(questionId);
+                  }, 5000);
+                }
+              }, 7000);
             } else if (gameStateRef.current === "question") {
               // We should have transitioned to reveal, but if we haven't, do it now
               // Then transition to leaderboard after reveal duration
+              // Preserve current question data before transitioning
+              preservedQuestionRef.current = currentQuestion;
+              preservedSelectedAnswerRef.current = selectedAnswer;
+              preservedCorrectAnswerIndexRef.current = correctAnswerIndex;
               setGameState("reveal");
               if (revealTimeoutRef.current) {
                 clearTimeout(revealTimeoutRef.current);
               }
               revealTimeoutRef.current = setTimeout(() => {
                 setGameState("leaderboard");
-              }, 1200);
-            } else {
-              setGameState("leaderboard");
-            }
-            leaderboardStartTimeRef.current = Date.now();
-
-            // Clear any existing timeout
-            if (leaderboardTimeoutRef.current) {
-              clearTimeout(leaderboardTimeoutRef.current);
-              leaderboardTimeoutRef.current = null;
-            }
-
-            // After 5 seconds, load next question
-            if (updatedRoom.current_question_id) {
-              const questionId = updatedRoom.current_question_id;
-              const startTime = Date.now();
-              leaderboardTimeoutRef.current = setTimeout(async () => {
-                // Ensure at least 5 seconds have passed
-                const elapsed = Date.now() - startTime;
-                if (elapsed < 5000) {
-                  // Wait a bit more
-                  const remaining = 5000 - elapsed;
+                leaderboardStartTimeRef.current = Date.now();
+                // Now set up timeout to load next question after showing leaderboard for 5 seconds
+                const questionId = nextQuestionIdRef.current;
+                if (questionId) {
+                  // Clear any existing leaderboard timeout
+                  if (leaderboardTimeoutRef.current) {
+                    clearTimeout(leaderboardTimeoutRef.current);
+                  }
                   leaderboardTimeoutRef.current = setTimeout(async () => {
                     await transitionToQuestion(questionId);
-                  }, remaining);
-                  return;
+                  }, 5000);
                 }
-                await transitionToQuestion(questionId);
-              }, 5000);
+              }, 7000);
+              // Don't clear selectedAnswer or correctAnswerIndex yet - keep them for reveal phase
+              setRoom(updatedRoom);
+            } else if (gameStateRef.current === "leaderboard") {
+              // Already in leaderboard - clear question data and set up timeout for next question
+              setSelectedAnswer(null);
+              setCorrectAnswerIndex(null);
+              setRoom(updatedRoom);
+              // If we don't have a timeout running, set one up
+              // Otherwise, let the existing timeout continue (don't reset it)
+              if (!leaderboardTimeoutRef.current && nextQuestionIdRef.current) {
+                leaderboardStartTimeRef.current = Date.now();
+                const questionId = nextQuestionIdRef.current;
+                leaderboardTimeoutRef.current = setTimeout(async () => {
+                  await transitionToQuestion(questionId);
+                }, 5000);
+              }
             }
           } else if (updatedRoom.current_question_id && updatedRoom.current_question_id !== currentRoom.current_question_id) {
             // Question changed (skip) - go directly to question
@@ -354,11 +402,19 @@ export default function RoomPage() {
                                        leaderboardStartTimeRef.current !== null &&
                                        (Date.now() - leaderboardStartTimeRef.current) < 5000;
             if (!isShowingLeaderboard) {
-              setRoom(updatedRoom);
-              await loadQuestion(updatedRoom.current_question_id);
+              // Clear reveal phase data BEFORE loading new question
+              // This is critical - if selectedAnswer is not null, checkRoundEnd will immediately transition to reveal
               setSelectedAnswer(null);
               setCorrectAnswerIndex(null);
+              preservedQuestionRef.current = null;
+              preservedSelectedAnswerRef.current = null;
+              preservedCorrectAnswerIndexRef.current = null;
+              // Set game state to question FIRST, before loading, to prevent checkRoundEnd from triggering
               setGameState("question");
+              setRoom(updatedRoom);
+              await loadQuestion(updatedRoom.current_question_id);
+              // Store the current round's end time for use during reveal phase
+              currentRoundEndsAtRef.current = updatedRoom.round_ends_at;
             } else {
               // We're showing leaderboard, just update room but don't change state
               setRoom(updatedRoom);
@@ -443,14 +499,17 @@ export default function RoomPage() {
         // Transition to reveal phase
         setGameState("reveal");
         
-        // After 1200ms, the server tick will handle transition to leaderboard
+        // After 7000ms, the server tick will handle transition to leaderboard
         // But we set a timeout as backup
         if (revealTimeoutRef.current) {
           clearTimeout(revealTimeoutRef.current);
         }
         revealTimeoutRef.current = setTimeout(() => {
-          // Server will handle the actual transition, but this ensures we don't get stuck
-        }, 1200);
+          // Transition to leaderboard after reveal duration
+          if (gameStateRef.current === "reveal") {
+            setGameState("leaderboard");
+          }
+        }, 7000);
       }
     };
 
@@ -513,13 +572,13 @@ export default function RoomPage() {
           if (gameStateRef.current === "question") {
             setGameState("reveal");
             
-            // Set timeout for reveal phase duration (1200ms)
+            // Set timeout for reveal phase duration (7000ms)
             if (revealTimeoutRef.current) {
               clearTimeout(revealTimeoutRef.current);
             }
             revealTimeoutRef.current = setTimeout(() => {
               // Server will handle transition to leaderboard via tick
-            }, 1200);
+            }, 7000);
           }
         }, 300); // Small delay to let answer submit complete
       }
@@ -588,7 +647,7 @@ export default function RoomPage() {
   return (
     <main className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       {/* Persistent Header */}
-      <header className="bg-surface shadow-sm px-4 py-3 flex items-center justify-between relative">
+      <header className="shadow-sm px-4 py-3 flex items-center justify-between relative" style={{ backgroundColor: "rgba(255, 255, 255, 0.05)" }}>
         {/* Team Name - Centered */}
         {myTeamName && (
           <div className="flex items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
@@ -596,7 +655,7 @@ export default function RoomPage() {
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: myTeamColor }}
             />
-            <span className="text-sm font-semibold text-black">
+            <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               {myTeamName}
             </span>
           </div>
@@ -621,9 +680,10 @@ export default function RoomPage() {
             selectedAnswer={selectedAnswer}
             teamColor={myTeamColor}
             teamName={myTeamName}
-            roundEndsAt={room.round_ends_at}
+            roundEndsAt={gameState === "reveal" ? currentRoundEndsAtRef.current : room.round_ends_at}
             correctAnswerIndex={correctAnswerIndex}
             isRevealPhase={gameState === "reveal"}
+            explanation={currentQuestion.explanation}
           />
         ) : (
           <LeaderboardView
@@ -643,7 +703,8 @@ export default function RoomPage() {
         <div className="fixed bottom-4 left-0 right-0 flex justify-center z-10">
           <button
             onClick={() => setQuestionControlsOpen(true)}
-            className="text-sm text-white/40 underline-offset-2 bg-surface/8 px-4 py-2 rounded-full"
+            className="underline-offset-2 bg-surface/8 px-4 py-2 rounded-full"
+            style={{ color: "rgba(255, 255, 255, 0.2)", fontSize: "12px" }}
           >
             Something looks off
           </button>

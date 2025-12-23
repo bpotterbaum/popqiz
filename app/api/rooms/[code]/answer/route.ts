@@ -16,7 +16,7 @@ export async function POST(
       );
     }
 
-    if (answer_index < 0 || answer_index > 2) {
+    if (answer_index < 0 || answer_index > 3) {
       return NextResponse.json(
         { error: 'Invalid answer_index' },
         { status: 400 }

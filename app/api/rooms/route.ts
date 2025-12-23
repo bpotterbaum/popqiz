@@ -122,8 +122,18 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating room:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    // Provide a more user-friendly error message for missing questions
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('No questions found for age band')) {
+      return NextResponse.json(
+        { error: `No questions available for ${age_band}. Please seed questions first using the admin panel.` },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Internal server error', details: errorMessage },
       { status: 500 }
     );
   }

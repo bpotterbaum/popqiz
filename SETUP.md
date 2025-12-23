@@ -22,7 +22,10 @@ npm install
    - `anon` public key
    - `service_role` secret key (keep this secret!)
 
-3. Go to SQL Editor and run the schema from `supabase/schema.sql`
+3. Go to SQL Editor and run:
+   - First, run the base schema from `supabase/schema.sql`
+   - Then, run migrations in order (if you have an existing database):
+     - `supabase/migration_add_source_and_variable_choices.sql` (adds source tracking and supports 2-4 answer choices)
 
 ### 3. Configure Environment Variables
 
@@ -49,6 +52,41 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### 6. (Optional) Seed Questions from OpenTDB
+
+To seed your database with questions from Open Trivia Database (free, CC BY-SA 4.0 licensed):
+
+**Option A: Use the API endpoint** (recommended for production)
+```bash
+# Seed questions for a specific age band and difficulty
+curl -X POST http://localhost:3000/api/admin/seed-opentdb \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 50, "difficulty": "easy", "ageBand": "kids"}'
+```
+
+**Option B: Use the bulk seeding script** (requires tsx)
+```bash
+# Install tsx if not already available
+npm install -D tsx
+
+# Run the seeding script (default: 2000 questions)
+npx tsx scripts/seed-opentdb.ts
+
+# Or specify a custom target count
+TARGET_COUNT=5000 npx tsx scripts/seed-opentdb.ts
+```
+
+**Note:** 
+- OpenTDB has a rate limit of 1 request per 5 seconds (automatically handled)
+- Script uses session tokens to avoid getting duplicate questions from OpenTDB
+- Questions are automatically deduplicated using question hashes
+- Questions are filtered by quality score (minimum 50 for OpenTDB, vs 70 for OpenAI)
+- Supports 2 choices (True/False), 3 choices, or 4 choices
+- Questions include source attribution (`opentdb` or `openai`)
+- Script will loop through different categories and difficulties to maximize variety
+- Progress is shown in real-time with estimated completion percentage
+- Script automatically stops when target count is reached or when it can't find more new questions
+
 ## Testing Multiplayer
 
 1. Open the app in two different browser windows (or use incognito mode)
@@ -68,6 +106,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 - **Server Authoritative**: All scoring and round progression happens server-side
 - **Real-time Updates**: Uses Supabase Realtime subscriptions (Postgres changes)
-- **Question Caching**: Questions generated via OpenAI and cached in `question_cache` table
+- **Question Caching**: Questions generated via OpenAI or seeded from OpenTDB, cached in `question_cache` table with source tracking
 - **Round Loop**: Server advances rounds when time expires or all players answer
 
