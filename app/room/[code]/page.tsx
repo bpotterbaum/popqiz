@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getOrCreateDeviceId, getTeamColorHex, getTextColorForBackground } from "@/lib/utils";
 import CircularTimer from "@/app/components/CircularTimer";
+import ResultIndicator from "@/app/components/ResultIndicator";
 import LeaderboardView from "@/app/components/LeaderboardView";
 import InviteSheet from "@/app/components/InviteSheet";
 import QuestionControlsSheet from "@/app/components/QuestionControlsSheet";
@@ -193,27 +194,27 @@ export default function RoomPage() {
     setLeaderboardOpacity(0);
     setNextRoundEndsAt(null);
     
-    // Set game state to question FIRST, before loading, to prevent checkRoundEnd from triggering
-    setGameState("question");
+    // Clear current question and set to loading state for clean transition
+    setCurrentQuestion(null);
+    setGameState("loading");
     
-    // Double-check we still have a question (room might have changed)
+    // Load question data FIRST, then set state to prevent rendering with stale data
     const latestRoom = roomRef.current;
-    if (latestRoom && latestRoom.current_question_id) {
-      await loadQuestion(latestRoom.current_question_id);
+    const questionIdToLoad = latestRoom?.current_question_id || questionId;
+    
+    if (questionIdToLoad) {
+      await loadQuestion(questionIdToLoad);
+      
       // Store the current round's end time for use during reveal phase
-      currentRoundEndsAtRef.current = latestRoom.round_ends_at;
-      // Clear previous scores for next round
-      setPreviousScores(new Map());
-    } else if (questionId) {
-      // Fallback to original question ID
-      await loadQuestion(questionId);
-      // Store the current round's end time for use during reveal phase
-      const latestRoom = roomRef.current;
       if (latestRoom) {
         currentRoundEndsAtRef.current = latestRoom.round_ends_at;
       }
+      
       // Clear previous scores for next round
       setPreviousScores(new Map());
+      
+      // Set game state to question AFTER loading, so we render with the new question data
+      setGameState("question");
     }
   }
 
@@ -687,8 +688,10 @@ export default function RoomPage() {
           <div className="flex flex-col items-center justify-center space-y-3 px-4 py-2 w-full max-h-full overflow-hidden">
             {/* Explanation/Question section - stays visible throughout */}
             <div className="flex flex-col items-center space-y-3 flex-shrink-0 w-full">
-              {/* Show explanation where timer was during reveal */}
-              {gameState === "reveal" && currentQuestion.explanation ? (
+              {/* Show result indicator if player answered during reveal, otherwise timer/explanation */}
+              {gameState === "reveal" && selectedAnswer !== null ? (
+                <ResultIndicator isCorrect={selectedAnswer === correctAnswerIndex} size={60} />
+              ) : gameState === "reveal" && currentQuestion.explanation ? (
                 <div className="w-full max-w-2xl px-2">
                   <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 w-full">
                     <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
@@ -700,8 +703,19 @@ export default function RoomPage() {
                 <CircularTimer endTime={gameState === "reveal" ? currentRoundEndsAtRef.current : room.round_ends_at} duration={20} size={60} />
               )}
               
-              {/* Question Text - hide when explanation is shown */}
-              {!(gameState === "reveal" && currentQuestion.explanation) && (
+              {/* Show explanation below result indicator if player answered */}
+              {gameState === "reveal" && selectedAnswer !== null && currentQuestion.explanation && (
+                <div className="w-full max-w-2xl px-2">
+                  <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 w-full">
+                    <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
+                      {currentQuestion.explanation}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Question Text - hide when explanation is shown or when showing result */}
+              {!(gameState === "reveal" && (currentQuestion.explanation || selectedAnswer !== null)) && (
                 <h2 className="text-lg sm:text-xl font-bold text-center text-text-primary px-2 leading-tight max-w-2xl">
                   {currentQuestion.question}
                 </h2>
