@@ -13,21 +13,52 @@ interface LeaderboardViewProps {
   teams: Team[];
   roundWinner?: string;
   previousScores?: Map<string, number>;
+  explanation?: string; // Optional explanation to display persistently
+  nextRoundEndsAt?: string | null; // End time for next round (for countdown timer)
+  showTimer?: boolean; // Whether to show the timer (during reveal phase)
+  compact?: boolean; // If true, render without wrapper padding (for absolute positioning)
 }
 
 export default function LeaderboardView({
   teams,
   roundWinner,
   previousScores = new Map(),
+  explanation,
+  nextRoundEndsAt,
+  showTimer = true,
+  compact = false,
 }: LeaderboardViewProps) {
   const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
   const [highlightedTeams, setHighlightedTeams] = useState<Set<string>>(new Set());
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(5);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animatedScores, setAnimatedScores] = useState<Map<string, number>>(new Map());
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
-  // Countdown timer
+  // Calculate time remaining for next round if nextRoundEndsAt is provided
   useEffect(() => {
+    if (!nextRoundEndsAt) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTimeRemaining = () => {
+      const now = new Date().getTime();
+      const end = new Date(nextRoundEndsAt).getTime();
+      const remaining = Math.max(0, Math.ceil((end - now) / 1000));
+      setTimeRemaining(remaining);
+    };
+
+    updateTimeRemaining();
+    const interval = setInterval(updateTimeRemaining, 1000);
+
+    return () => clearInterval(interval);
+  }, [nextRoundEndsAt]);
+
+  // Countdown timer (fallback if no nextRoundEndsAt)
+  useEffect(() => {
+    if (nextRoundEndsAt) return; // Use nextRoundEndsAt timer instead
+
     setCountdown(5);
     setIsAnimating(false);
 
@@ -51,7 +82,7 @@ export default function LeaderboardView({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [teams]); // Reset countdown when teams change (new round)
+  }, [teams, nextRoundEndsAt]); // Reset countdown when teams change (new round)
 
   // Calculate score changes and highlight teams that gained points
   useEffect(() => {
@@ -132,10 +163,30 @@ export default function LeaderboardView({
     return Math.max(0, currentTeam.score - previousScore);
   };
 
+  // Determine what countdown value to show
+  const displayCountdown = timeRemaining !== null ? timeRemaining : countdown;
+
+  const containerClasses = compact 
+    ? "flex flex-col items-center justify-center w-full"
+    : "flex flex-col items-center justify-center px-4 py-6 min-h-[60vh] w-full max-w-md mx-auto";
+
   return (
-    <div className="flex flex-col items-center justify-center px-4 py-6 min-h-[60vh] w-full max-w-md mx-auto">
-      {/* Leaderboard Title */}
-      <h2 className="text-2xl font-bold text-text-primary mb-6">Round Results</h2>
+    <div className={containerClasses}>
+      {/* Explanation - replaces title/timer when provided */}
+      {explanation && (
+        <div className="w-full max-w-2xl px-2 mb-6">
+          <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 w-full">
+            <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
+              {explanation}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard Title - only show if no explanation */}
+      {!explanation && (
+        <h2 className="text-lg font-bold text-text-primary mb-6">Round Results</h2>
+      )}
 
       {/* Leaderboard */}
       <div className="w-full space-y-4 mb-8">
@@ -230,23 +281,25 @@ export default function LeaderboardView({
         })}
       </div>
 
-      {/* Next question countdown */}
-      <div className="mt-auto flex flex-col items-center space-y-3 pt-4">
-        <p className="text-text-secondary text-sm font-medium">
-          Next question in
-        </p>
-        <div
-          className={`text-5xl font-bold tabular-nums transition-all ${
-            isAnimating ? "text-brand" : "text-text-primary"
-          }`}
-          style={{
-            transform: isAnimating ? "scale(1.3)" : "scale(1)",
-            transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          }}
-        >
-          {countdown > 0 ? countdown : "..."}
+      {/* Next question countdown - only show if no explanation (explanation replaces timer) */}
+      {showTimer && !explanation && (
+        <div className="mt-auto flex flex-col items-center space-y-2 pt-4">
+          <p className="text-text-secondary text-xs font-medium opacity-70">
+            Next question in
+          </p>
+          <div
+            className={`text-3xl font-semibold tabular-nums transition-all opacity-80 ${
+              isAnimating ? "text-brand" : "text-text-secondary"
+            }`}
+            style={{
+              transform: isAnimating ? "scale(1.2)" : "scale(1)",
+              transition: "all 0.3s ease-out",
+            }}
+          >
+            {displayCountdown > 0 ? displayCountdown : "..."}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

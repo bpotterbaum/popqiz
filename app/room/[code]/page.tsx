@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getOrCreateDeviceId, getTeamColorHex } from "@/lib/utils";
-import QuestionView from "@/app/components/QuestionView";
+import { getOrCreateDeviceId, getTeamColorHex, getTextColorForBackground } from "@/lib/utils";
+import CircularTimer from "@/app/components/CircularTimer";
 import LeaderboardView from "@/app/components/LeaderboardView";
 import InviteSheet from "@/app/components/InviteSheet";
 import QuestionControlsSheet from "@/app/components/QuestionControlsSheet";
@@ -58,8 +58,6 @@ export default function RoomPage() {
   const [previousScores, setPreviousScores] = useState<Map<string, number>>(new Map());
 
   const tickIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const leaderboardTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const leaderboardStartTimeRef = useRef<number | null>(null);
   const roomRef = useRef<Room | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
   const scoresBeforeScoringRef = useRef<Map<string, number>>(new Map());
@@ -69,6 +67,9 @@ export default function RoomPage() {
   const preservedSelectedAnswerRef = useRef<number | null>(null);
   const preservedCorrectAnswerIndexRef = useRef<number | null>(null);
   const deviceId = getOrCreateDeviceId();
+  const [shouldFadeAnswers, setShouldFadeAnswers] = useState(false);
+  const [leaderboardOpacity, setLeaderboardOpacity] = useState(0);
+  const [nextRoundEndsAt, setNextRoundEndsAt] = useState<string | null>(null);
 
   // Keep refs in sync
   useEffect(() => {
@@ -147,11 +148,8 @@ export default function RoomPage() {
       const now = new Date();
       const roundEndsAt = data.round_ends_at ? new Date(data.round_ends_at) : null;
 
-      if (roundEndsAt && now < roundEndsAt) {
-        setGameState("question");
-      } else {
-        setGameState("leaderboard");
-      }
+      // Always go to question state (leaderboard shown during reveal phase)
+      setGameState("question");
     }
   }
 
@@ -191,6 +189,9 @@ export default function RoomPage() {
     preservedQuestionRef.current = null;
     preservedSelectedAnswerRef.current = null;
     preservedCorrectAnswerIndexRef.current = null;
+    setShouldFadeAnswers(false);
+    setLeaderboardOpacity(0);
+    setNextRoundEndsAt(null);
     
     // Set game state to question FIRST, before loading, to prevent checkRoundEnd from triggering
     setGameState("question");
@@ -214,8 +215,6 @@ export default function RoomPage() {
       // Clear previous scores for next round
       setPreviousScores(new Map());
     }
-    leaderboardTimeoutRef.current = null;
-    leaderboardStartTimeRef.current = null;
   }
 
   // Load players
@@ -323,6 +322,11 @@ export default function RoomPage() {
             if (updatedRoom.current_question_id) {
               nextQuestionIdRef.current = updatedRoom.current_question_id;
             }
+            
+            // Store next round's end time for timer display
+            if (updatedRoom.round_ends_at) {
+              setNextRoundEndsAt(updatedRoom.round_ends_at);
+            }
 
             // Sequential flow: question -> reveal -> leaderboard -> next round
             // When round advances, we should show leaderboard for the round that just ended
@@ -332,23 +336,22 @@ export default function RoomPage() {
               // Preserve them so user can finish reading the explanation
               // Just update the room state (for other data like scores)
               setRoom(updatedRoom);
+              setNextRoundEndsAt(updatedRoom.round_ends_at);
+              // Start fading in leaderboard if not already started
+              if (leaderboardOpacity < 1) {
+                setTimeout(() => {
+                  setLeaderboardOpacity(1);
+                }, 0);
+              }
               // Already in reveal phase - reset timeout to give full 7000ms for reading explanation
               if (revealTimeoutRef.current) {
                 clearTimeout(revealTimeoutRef.current);
               }
-              revealTimeoutRef.current = setTimeout(() => {
-                setGameState("leaderboard");
-                leaderboardStartTimeRef.current = Date.now();
-                // Now set up timeout to load next question after showing leaderboard for 5 seconds
+              revealTimeoutRef.current = setTimeout(async () => {
+                // Transition directly to next question (leaderboard already shown during reveal)
                 const questionId = nextQuestionIdRef.current;
                 if (questionId) {
-                  // Clear any existing leaderboard timeout
-                  if (leaderboardTimeoutRef.current) {
-                    clearTimeout(leaderboardTimeoutRef.current);
-                  }
-                  leaderboardTimeoutRef.current = setTimeout(async () => {
-                    await transitionToQuestion(questionId);
-                  }, 5000);
+                  await transitionToQuestion(questionId);
                 }
               }, 7000);
             } else if (gameStateRef.current === "question") {
@@ -359,49 +362,36 @@ export default function RoomPage() {
               preservedSelectedAnswerRef.current = selectedAnswer;
               preservedCorrectAnswerIndexRef.current = correctAnswerIndex;
               setGameState("reveal");
+              setShouldFadeAnswers(false);
+              setLeaderboardOpacity(0);
+              setNextRoundEndsAt(updatedRoom.round_ends_at);
+              
+              // Start fading answers after 3 seconds
+              setTimeout(() => {
+                setShouldFadeAnswers(true);
+              }, 3000);
+              
+              // Start fading in leaderboard after 3 seconds
+              setTimeout(() => {
+                setLeaderboardOpacity(1);
+              }, 3000);
+              
               if (revealTimeoutRef.current) {
                 clearTimeout(revealTimeoutRef.current);
               }
-              revealTimeoutRef.current = setTimeout(() => {
-                setGameState("leaderboard");
-                leaderboardStartTimeRef.current = Date.now();
-                // Now set up timeout to load next question after showing leaderboard for 5 seconds
+              revealTimeoutRef.current = setTimeout(async () => {
+                // Transition directly to next question (leaderboard already shown during reveal)
                 const questionId = nextQuestionIdRef.current;
                 if (questionId) {
-                  // Clear any existing leaderboard timeout
-                  if (leaderboardTimeoutRef.current) {
-                    clearTimeout(leaderboardTimeoutRef.current);
-                  }
-                  leaderboardTimeoutRef.current = setTimeout(async () => {
-                    await transitionToQuestion(questionId);
-                  }, 5000);
+                  await transitionToQuestion(questionId);
                 }
               }, 7000);
               // Don't clear selectedAnswer or correctAnswerIndex yet - keep them for reveal phase
               setRoom(updatedRoom);
-            } else if (gameStateRef.current === "leaderboard") {
-              // Already in leaderboard - clear question data and set up timeout for next question
-              setSelectedAnswer(null);
-              setCorrectAnswerIndex(null);
-              setRoom(updatedRoom);
-              // If we don't have a timeout running, set one up
-              // Otherwise, let the existing timeout continue (don't reset it)
-              if (!leaderboardTimeoutRef.current && nextQuestionIdRef.current) {
-                leaderboardStartTimeRef.current = Date.now();
-                const questionId = nextQuestionIdRef.current;
-                leaderboardTimeoutRef.current = setTimeout(async () => {
-                  await transitionToQuestion(questionId);
-                }, 5000);
-              }
             }
           } else if (updatedRoom.current_question_id && updatedRoom.current_question_id !== currentRoom.current_question_id) {
             // Question changed (skip) - go directly to question
-            // But only if we're not currently showing leaderboard with a timeout
-            const isShowingLeaderboard = gameStateRef.current === "leaderboard" && 
-                                       leaderboardTimeoutRef.current !== null &&
-                                       leaderboardStartTimeRef.current !== null &&
-                                       (Date.now() - leaderboardStartTimeRef.current) < 5000;
-            if (!isShowingLeaderboard) {
+            {
               // Clear reveal phase data BEFORE loading new question
               // This is critical - if selectedAnswer is not null, checkRoundEnd will immediately transition to reveal
               setSelectedAnswer(null);
@@ -415,23 +405,10 @@ export default function RoomPage() {
               await loadQuestion(updatedRoom.current_question_id);
               // Store the current round's end time for use during reveal phase
               currentRoundEndsAtRef.current = updatedRoom.round_ends_at;
-            } else {
-              // We're showing leaderboard, just update room but don't change state
-              setRoom(updatedRoom);
             }
           } else {
             // Just update room state (score changes, etc.)
-            // Don't change gameState if we're showing leaderboard
-            const isShowingLeaderboard = gameStateRef.current === "leaderboard" && 
-                                       leaderboardTimeoutRef.current !== null &&
-                                       leaderboardStartTimeRef.current !== null &&
-                                       (Date.now() - leaderboardStartTimeRef.current) < 5000;
-            if (!isShowingLeaderboard) {
-              setRoom(updatedRoom);
-            } else {
-              // Just update room, don't change state
-              setRoom(updatedRoom);
-            }
+            setRoom(updatedRoom);
           }
         }
       )
@@ -470,9 +447,6 @@ export default function RoomPage() {
     return () => {
       roomSubscription.unsubscribe();
       playersSubscription.unsubscribe();
-      if (leaderboardTimeoutRef.current) {
-        clearTimeout(leaderboardTimeoutRef.current);
-      }
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
       }
@@ -498,16 +472,36 @@ export default function RoomPage() {
       if (shouldShowReveal && gameStateRef.current === "question") {
         // Transition to reveal phase
         setGameState("reveal");
+        setShouldFadeAnswers(false);
+        setLeaderboardOpacity(0);
         
-        // After 7000ms, the server tick will handle transition to leaderboard
-        // But we set a timeout as backup
+        // Estimate next round end time if not yet available (33 seconds from now)
+        if (!nextRoundEndsAt) {
+          const estimatedNextRoundEndsAt = new Date(Date.now() + 33 * 1000).toISOString();
+          setNextRoundEndsAt(estimatedNextRoundEndsAt);
+        }
+        
+        // Start fading answers after 3 seconds
+        setTimeout(() => {
+          setShouldFadeAnswers(true);
+        }, 3000);
+        
+        // Start fading in leaderboard after 3 seconds (same time as answer fade)
+        setTimeout(() => {
+          setLeaderboardOpacity(1);
+        }, 3000);
+        
+        // After 7000ms, transition directly to next question (leaderboard already shown during reveal)
         if (revealTimeoutRef.current) {
           clearTimeout(revealTimeoutRef.current);
         }
-        revealTimeoutRef.current = setTimeout(() => {
-          // Transition to leaderboard after reveal duration
+        revealTimeoutRef.current = setTimeout(async () => {
+          // Transition directly to next question after reveal duration
           if (gameStateRef.current === "reveal") {
-            setGameState("leaderboard");
+            const questionId = nextQuestionIdRef.current || roomRef.current?.current_question_id;
+            if (questionId) {
+              await transitionToQuestion(questionId);
+            }
           }
         }, 7000);
       }
@@ -571,6 +565,24 @@ export default function RoomPage() {
         setTimeout(() => {
           if (gameStateRef.current === "question") {
             setGameState("reveal");
+            setShouldFadeAnswers(false);
+            setLeaderboardOpacity(0);
+            
+            // Estimate next round end time if not yet available (33 seconds from now)
+            if (!nextRoundEndsAt && room) {
+              const estimatedNextRoundEndsAt = new Date(Date.now() + 33 * 1000).toISOString();
+              setNextRoundEndsAt(estimatedNextRoundEndsAt);
+            }
+            
+            // Start fading answers after 3 seconds
+            setTimeout(() => {
+              setShouldFadeAnswers(true);
+            }, 3000);
+            
+            // Start fading in leaderboard after 3 seconds
+            setTimeout(() => {
+              setLeaderboardOpacity(1);
+            }, 3000);
             
             // Set timeout for reveal phase duration (7000ms)
             if (revealTimeoutRef.current) {
@@ -608,13 +620,12 @@ export default function RoomPage() {
     }
   };
 
-  // Capture previous scores when transitioning to leaderboard
+  // Capture previous scores when transitioning to reveal (for leaderboard display)
   const previousScoresRef = useRef<Map<string, number>>(new Map());
   
   useEffect(() => {
-    if (gameState === "leaderboard" && players.length > 0) {
+    if (gameState === "reveal" && players.length > 0) {
       // If we don't have previous scores yet, capture current scores as baseline
-      // (this handles the first leaderboard display)
       if (previousScores.size === 0) {
         const currentScores = new Map<string, number>();
         players.forEach((p) => {
@@ -628,7 +639,7 @@ export default function RoomPage() {
 
   // Determine round winner (highest score after round ends)
   useEffect(() => {
-    if (gameState === "leaderboard" && players.length > 0) {
+    if (gameState === "reveal" && players.length > 0) {
       const sorted = [...players].sort((a, b) => b.score - a.score);
       if (sorted.length > 0 && sorted[0].score > 0) {
         setRoundWinner(sorted[0].team_name);
@@ -671,31 +682,136 @@ export default function RoomPage() {
       </header>
 
       {/* Game Content */}
-      <div className="flex-1 flex items-center justify-center min-h-0">
+      <div className="flex-1 flex items-center justify-center min-h-0 relative">
         {gameState === "question" || gameState === "reveal" ? (
-          <QuestionView
-            question={currentQuestion.question}
-            answers={currentQuestion.choices}
-            onAnswer={handleAnswer}
-            selectedAnswer={selectedAnswer}
-            teamColor={myTeamColor}
-            teamName={myTeamName}
-            roundEndsAt={gameState === "reveal" ? currentRoundEndsAtRef.current : room.round_ends_at}
-            correctAnswerIndex={correctAnswerIndex}
-            isRevealPhase={gameState === "reveal"}
-            explanation={currentQuestion.explanation}
-          />
-        ) : (
-          <LeaderboardView
-            teams={players.map((p) => ({
-              name: p.team_name,
-              score: p.score,
-              color: p.team_color,
-            }))}
-            roundWinner={roundWinner}
-            previousScores={previousScores}
-          />
-        )}
+          <div className="flex flex-col items-center justify-center space-y-3 px-4 py-2 w-full max-h-full overflow-hidden">
+            {/* Explanation/Question section - stays visible throughout */}
+            <div className="flex flex-col items-center space-y-3 flex-shrink-0 w-full">
+              {/* Show explanation where timer was during reveal */}
+              {gameState === "reveal" && currentQuestion.explanation ? (
+                <div className="w-full max-w-2xl px-2">
+                  <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 w-full">
+                    <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
+                      {currentQuestion.explanation}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <CircularTimer endTime={gameState === "reveal" ? currentRoundEndsAtRef.current : room.round_ends_at} duration={20} size={60} />
+              )}
+              
+              {/* Question Text - hide when explanation is shown */}
+              {!(gameState === "reveal" && currentQuestion.explanation) && (
+                <h2 className="text-lg sm:text-xl font-bold text-center text-text-primary px-2 leading-tight max-w-2xl">
+                  {currentQuestion.question}
+                </h2>
+              )}
+            </div>
+
+            {/* Answers area - where leaderboard will fade in */}
+            <div className="w-full max-w-md relative min-h-[200px]">
+              {/* Question View Answers - fade out */}
+              <div 
+                className="w-full space-y-2 transition-opacity duration-1000"
+                style={{ opacity: shouldFadeAnswers ? 0 : 1 }}
+              >
+                {currentQuestion.choices.map((answer, index) => {
+                  const isSelected = selectedAnswer === index;
+                  const isCorrectAnswer = correctAnswerIndex !== null && index === correctAnswerIndex;
+                  const isWrongSelected = gameState === "reveal" && isSelected && !isCorrectAnswer;
+
+                  let buttonStyle: React.CSSProperties = {};
+                  let buttonClasses = "w-full py-3 px-4 rounded-2xl text-base font-semibold text-center transition-all min-h-[56px] flex items-center justify-center ";
+
+                  if (gameState === "reveal") {
+                    if (isCorrectAnswer && isSelected) {
+                      buttonStyle = {
+                        backgroundColor: "#22C55E",
+                        color: "#FFFFFF",
+                        border: "3px solid #16A34A",
+                        transform: "scale(1.05)",
+                      };
+                      buttonClasses += "shadow-lg";
+                    } else if (isCorrectAnswer) {
+                      buttonStyle = { backgroundColor: "#22C55E", color: "#FFFFFF" };
+                      buttonClasses += "shadow-lg";
+                    } else if (isWrongSelected) {
+                      // Wrong selected answer: red background, white text
+                      buttonStyle = {
+                        backgroundColor: "#E63946",
+                        color: "#FFFFFF",
+                        border: "3px solid #DC2626",
+                        opacity: 0.9,
+                      };
+                      buttonClasses += "shadow-md";
+                    } else {
+                      buttonStyle = { 
+                        opacity: 0.4,
+                        backgroundColor: "#FFFFFF",
+                        color: "#1F2937",
+                      };
+                      buttonClasses += "shadow-md border-2 border-transparent";
+                    }
+                    buttonClasses += " cursor-default";
+                  } else {
+                    if (isSelected) {
+                      // Selected answer during question phase: use brand orange
+                      buttonStyle = { 
+                        backgroundColor: "#FCB107", 
+                        color: "#FFFFFF",
+                      };
+                      buttonClasses += "shadow-lg";
+                    } else {
+                      buttonClasses += "bg-surface text-text-primary-dark shadow-md border-2 border-transparent";
+                    }
+                    if (selectedAnswer === null) {
+                      buttonClasses += " active:scale-[0.98]";
+                    } else {
+                      buttonClasses += " cursor-default";
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => gameState === "question" && selectedAnswer === null && handleAnswer(index)}
+                      disabled={selectedAnswer !== null || gameState === "reveal"}
+                      className={buttonClasses}
+                      style={buttonStyle}
+                    >
+                      {answer}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Leaderboard - fades in where answers were */}
+              {gameState === "reveal" && (
+                <div
+                  className="absolute inset-0 flex items-start justify-center transition-opacity duration-1000"
+                  style={{ opacity: leaderboardOpacity, pointerEvents: leaderboardOpacity > 0.5 ? 'auto' : 'none' }}
+                >
+                  <div className="w-full max-w-md">
+                    {/* Use compact leaderboard render here - just the teams list */}
+                    <LeaderboardView
+                      teams={players.map((p) => ({
+                        name: p.team_name,
+                        score: p.score,
+                        color: p.team_color,
+                      }))}
+                      roundWinner={roundWinner}
+                      previousScores={previousScores}
+                      explanation={undefined} // Explanation is shown above
+                      nextRoundEndsAt={nextRoundEndsAt}
+                      showTimer={false} // No timer during reveal, explanation replaces it
+                      compact={true} // Compact mode for absolute positioning
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Feedback Link - Pinned to Bottom */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import CircularTimer from "./CircularTimer";
 import ResultIndicator from "./ResultIndicator";
 import { getTextColorForBackground } from "@/lib/utils";
@@ -15,6 +16,7 @@ interface QuestionViewProps {
   correctAnswerIndex?: number | null; // For reveal phase
   isRevealPhase?: boolean; // Whether we're in reveal phase
   explanation?: string; // Optional explanation to display during reveal
+  shouldFadeAnswers?: boolean; // Whether answers should fade out
 }
 
 export default function QuestionView({
@@ -28,15 +30,39 @@ export default function QuestionView({
   correctAnswerIndex = null,
   isRevealPhase = false,
   explanation,
+  shouldFadeAnswers = false,
 }: QuestionViewProps) {
   const isCorrect = selectedAnswer !== null && selectedAnswer === correctAnswerIndex;
+  const [answersOpacity, setAnswersOpacity] = useState(1);
+
+  // Handle fading out answers
+  useEffect(() => {
+    if (shouldFadeAnswers && isRevealPhase) {
+      // Start fade after a brief delay to let users see the highlights
+      const fadeTimer = setTimeout(() => {
+        setAnswersOpacity(0);
+      }, 2000); // Show highlights for 2 seconds, then fade
+      return () => clearTimeout(fadeTimer);
+    } else {
+      setAnswersOpacity(1);
+    }
+  }, [shouldFadeAnswers, isRevealPhase]);
 
   return (
     <div className="flex flex-col items-center justify-center space-y-3 px-4 py-2 w-full max-h-full overflow-hidden">
-      {/* Timer/Result Indicator and Question */}
-      <div className="flex flex-col items-center space-y-3 flex-shrink-0">
-        {/* Show Result Indicator during reveal (if player answered), Timer otherwise */}
-        {isRevealPhase ? (
+      {/* Timer/Result Indicator/Explanation and Question */}
+      <div className="flex flex-col items-center space-y-3 flex-shrink-0 w-full">
+        {/* During reveal with explanation: show explanation instead of timer/result */}
+        {isRevealPhase && explanation ? (
+          <div className="w-full max-w-2xl px-2">
+            <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 w-full">
+              <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
+                {explanation}
+              </p>
+            </div>
+          </div>
+        ) : isRevealPhase ? (
+          // Show Result Indicator during reveal (if player answered), Timer otherwise
           selectedAnswer !== null ? (
             <ResultIndicator isCorrect={isCorrect} size={60} />
           ) : (
@@ -51,21 +77,13 @@ export default function QuestionView({
         <h2 className="text-lg sm:text-xl font-bold text-center text-text-primary px-2 leading-tight max-w-2xl">
           {question}
         </h2>
-        
-        {/* Explanation (shown during reveal phase if available) */}
-        {isRevealPhase && explanation && (
-          <div className="w-full max-w-2xl px-2">
-            <div className="px-4 py-3 bg-surface-secondary/50 rounded-xl border border-text-secondary/20 mt-2 w-full">
-              <p className="text-sm sm:text-base text-text-primary text-center leading-relaxed">
-                {explanation}
-              </p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Answer Buttons */}
-      <div className="w-full max-w-md space-y-2 flex-shrink-0 min-h-0">
+      <div 
+        className="w-full max-w-md space-y-2 flex-shrink-0 min-h-0 transition-opacity duration-1000"
+        style={{ opacity: answersOpacity }}
+      >
         {answers.map((answer, index) => {
           const isSelected = selectedAnswer === index;
           const isCorrectAnswer = correctAnswerIndex !== null && index === correctAnswerIndex;
