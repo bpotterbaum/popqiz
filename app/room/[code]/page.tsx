@@ -169,10 +169,13 @@ export default function RoomPage() {
       return;
     }
 
+    // Ensure choices is an array
+    const choices = Array.isArray(data.choices) ? data.choices : [];
+    
     setCurrentQuestion({
       id: data.id,
       question: data.question,
-      choices: data.choices as string[],
+      choices: choices,
       correct_index: data.correct_index,
       explanation: data.explanation || undefined,
     });
@@ -180,6 +183,11 @@ export default function RoomPage() {
     // Store correct answer index for reveal phase
     if (data.correct_index !== undefined) {
       setCorrectAnswerIndex(data.correct_index);
+    }
+    
+    // Log warning if choices is missing or empty
+    if (!choices || choices.length === 0) {
+      console.warn("Question loaded without choices:", data.id);
     }
   }
 
@@ -209,7 +217,7 @@ export default function RoomPage() {
       await loadQuestion(questionIdToLoad);
       
       // Calculate the exact end time for the 20-second question phase
-      // The server sets round_ends_at to include reveal phase (33s total),
+      // The server sets round_ends_at to include reveal phase (31s total),
       // but we need exactly 20 seconds for the question phase
       const questionPhaseEndsAt = new Date(Date.now() + 20 * 1000).toISOString();
       
@@ -401,6 +409,11 @@ export default function RoomPage() {
               preservedQuestionRef.current = null;
               preservedSelectedAnswerRef.current = null;
               preservedCorrectAnswerIndexRef.current = null;
+              // Reset fade states to ensure answers are visible
+              setShouldFadeAnswers(false);
+              setLeaderboardOpacity(0);
+              setRevealStartTime(null);
+              setNextRoundEndsAt(null);
               // Update room state FIRST so timer has correct round_ends_at immediately
               setRoom(updatedRoom);
               currentRoundEndsAtRef.current = updatedRoom.round_ends_at;
@@ -480,9 +493,9 @@ export default function RoomPage() {
         // Track when reveal phase starts for countdown timer
         setRevealStartTime(Date.now());
         
-        // Estimate next round end time if not yet available (33 seconds from now)
+        // Estimate next round end time if not yet available (31 seconds from now)
         if (!nextRoundEndsAt) {
-          const estimatedNextRoundEndsAt = new Date(Date.now() + 33 * 1000).toISOString();
+          const estimatedNextRoundEndsAt = new Date(Date.now() + 31 * 1000).toISOString();
           setNextRoundEndsAt(estimatedNextRoundEndsAt);
         }
         
@@ -562,9 +575,9 @@ export default function RoomPage() {
             setLeaderboardOpacity(0);
             setRevealStartTime(Date.now());
             
-            // Estimate next round end time if not yet available (33 seconds from now)
+            // Estimate next round end time if not yet available (31 seconds from now)
             if (!nextRoundEndsAt && room) {
-              const estimatedNextRoundEndsAt = new Date(Date.now() + 33 * 1000).toISOString();
+              const estimatedNextRoundEndsAt = new Date(Date.now() + 31 * 1000).toISOString();
               setNextRoundEndsAt(estimatedNextRoundEndsAt);
             }
             
@@ -720,7 +733,8 @@ export default function RoomPage() {
                 className="w-full space-y-2 transition-opacity duration-1000"
                 style={{ opacity: shouldFadeAnswers ? 0 : 1 }}
               >
-                {currentQuestion.choices.map((answer, index) => {
+                {currentQuestion.choices && Array.isArray(currentQuestion.choices) && currentQuestion.choices.length > 0 ? (
+                  currentQuestion.choices.map((answer, index) => {
                   const isSelected = selectedAnswer === index;
                   const isCorrectAnswer = correctAnswerIndex !== null && index === correctAnswerIndex;
                   const isWrongSelected = gameState === "reveal" && isSelected && !isCorrectAnswer;
@@ -787,7 +801,12 @@ export default function RoomPage() {
                       {answer}
                     </button>
                   );
-                })}
+                })
+                ) : (
+                  <div className="text-center text-text-secondary py-4">
+                    Loading answers...
+                  </div>
+                )}
               </div>
 
               {/* Leaderboard - fades in where answers were */}
