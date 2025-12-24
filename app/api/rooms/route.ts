@@ -4,8 +4,9 @@ import { generateRoomCode, assignTeamColorAndName } from '@/lib/utils';
 import { getRandomQuestion } from '@/lib/questions';
 
 export async function POST(request: NextRequest) {
+  let age_band;
   try {
-    const { age_band } = await request.json();
+    age_band = (await request.json()).age_band;
 
     if (!age_band || !['kids', 'tweens', 'family', 'adults'].includes(age_band)) {
       return NextResponse.json(
