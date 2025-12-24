@@ -189,7 +189,7 @@ export default function ReflectionView({
                 teams={teams}
                 roundWinner={roundWinner}
                 previousScores={previousScores}
-                showCountdown={false}
+                showTimer={false}
               />
             )}
           </div>
