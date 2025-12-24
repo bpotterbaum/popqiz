@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 type BottomCountdownProps = {
   label?: string;
   targetTimeMs: number; // epoch millis
-  onReachZero?: boolean;
+  onReachZero?: any;
 };
 
 function clampSeconds(ms: number) {
